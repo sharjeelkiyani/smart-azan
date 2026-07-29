@@ -20,7 +20,9 @@ import os
 import shutil
 import subprocess
 
-PLAY_TIMEOUT = 60  # seconds - longest a single clip may block the caller
+PLAY_TIMEOUT = 1800  # seconds - generous cap (30 min); only meant to catch a
+                      # genuinely hung process, not to bound real recordings
+                      # (a full azan/Quran recitation can run several minutes)
 
 _HAS = {}
 
@@ -285,7 +287,13 @@ def play(path, cfg, timeout=PLAY_TIMEOUT, attempts=PLAY_ATTEMPTS):
                   + (f" (attempt {attempt})" if attempt > 1 else ""))
             return True
         except subprocess.TimeoutExpired:
-            last_err = "timed out"
+            # A timeout means the file legitimately ran longer than `timeout`
+            # (or something is genuinely hung) - retrying with the same
+            # timeout would just time out again the same way, so don't burn
+            # through more attempts for this failure mode.
+            last_err = f"timed out after {timeout}s"
+            print(f"[Audio] attempt {attempt}/{attempts} failed for '{path}': {last_err}")
+            break
         except subprocess.CalledProcessError as e:
             last_err = f"exit code {e.returncode}"
         except Exception as e:
