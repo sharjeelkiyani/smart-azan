@@ -1,0 +1,313 @@
+{% extends "base.html" %}
+{% block title %}Smart Azan · Home{% endblock %}
+
+{% block content %}
+  <!-- Connectivity -->
+  <section class="card" id="conn-card">
+    <h2>Connectivity</h2>
+    <div class="conn-list">
+      <!-- Ethernet -->
+      <div class="conn-item" id="eth-row">
+        <span class="dot" id="eth-dot"></span>
+        <div class="conn-main">
+          <div class="conn-title">Ethernet</div>
+          <div class="conn-sub" id="eth-sub">—</div>
+        </div>
+      </div>
+
+      <!-- Wi-Fi -->
+      <div class="conn-item" id="wifi-row">
+        <span class="dot" id="wifi-dot"></span>
+        <div class="conn-main">
+          <div class="conn-title">Wi-Fi</div>
+          <div class="conn-sub" id="wifi-sub">—</div>
+        </div>
+        <div class="inline">
+          <button type="button" class="btn primary small" onclick="setWifi('on')" id="btn-wifi-on" style="display:none">Enable Wi-Fi</button>
+          <button type="button" class="btn small" onclick="setWifi('off')" id="btn-wifi-off" style="display:none">Disable Wi-Fi</button>
+          <button type="button" class="btn small" onclick="scanWifi()" id="btn-wifi-scan" style="display:none">Scan Wi-Fi</button>
+        </div>
+      </div>
+
+      <!-- Hotspot -->
+      <div class="conn-item" id="hotspot-row">
+        <span class="dot" id="hotspot-dot"></span>
+        <div class="conn-main">
+          <div class="conn-title">Hotspot</div>
+          <div class="conn-sub" id="hotspot-sub">—</div>
+        </div>
+        <div class="inline">
+          <button type="button" class="btn small" onclick="hotspot('start')" id="btn-hs-on" style="display:none">Start</button>
+          <button type="button" class="btn small" onclick="hotspot('stop')" id="btn-hs-off" style="display:none">Stop</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Audio -->
+  <section class="card">
+    <h2>Audio</h2>
+    <div class="row">
+      <div class="pill" id="pill-output">Output: …</div>
+      <div class="pill" id="pill-sink">Sink: …</div>
+      <div class="pill">Volume: {{ cfg.get('volume', 70) }}%</div>
+    </div>
+  </section>
+
+  <!-- Today timetable -->
+  <section class="card">
+    <h2>Today's Timetable ({{ current_date }})</h2>
+    {% if timetable %}
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Prayer</th>
+              <th>Azan</th>
+              <th>Iqama</th>
+              <th>Selected Azan File</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% set ap = cfg.get('azan_audio_per_prayer', {}) %}
+            {% set row = timetable[0] %}
+            {% for p in ['Fajr','Dhuhr','Asr','Maghrib','Isha'] %}
+              <tr>
+                <td><strong>{{ p }}</strong></td>
+                <td>{{ row.get(p, '') }}</td>
+                <td>{{ row.get('Iqama_' ~ p) or '-' }}</td>
+                <td>{{ ap.get(p, cfg.get('azan_audio','')) }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="muted">No timetable for today. Upload your CSV on the Azan page.</p>
+    {% endif %}
+  </section>
+
+  <!-- Quick actions -->
+  <section class="card">
+    <h2>Quick actions</h2>
+    <div class="grid2">
+      <button id="btn-scan-bt-home" class="btn" type="button">🔎 Scan Bluetooth</button>
+
+      <form method="post" action="{{ url_for('azan.disconnect_bt_device') }}">
+        <button class="btn" type="submit">🔌 Disconnect BT</button>
+      </form>
+
+      <!-- NEW: reconnect saved MAC -->
+      <form method="post" action="{{ url_for('azan.connect_bt_device') }}">
+        <button class="btn" type="submit">🔁 Reconnect BT (saved)</button>
+      </form>
+
+      <button class="btn" type="button" onclick="hotspot('start')">📡 Start Hotspot</button>
+      <button class="btn" type="button" onclick="hotspot('stop')">🛑 Stop Hotspot</button>
+    </div>
+
+    <!-- Scan results -->
+    <div id="bt-devices-home" class="list" style="margin-top:10px"></div>
+  </section>
+{% endblock %}
+
+{% block body_extra %}
+<style>
+  .conn-list{display:flex;flex-direction:column;gap:10px}
+  .conn-item{display:flex;align-items:center;gap:12px;justify-content:flex-start}
+  .conn-item .inline{margin-left:auto;display:flex;gap:8px}
+  .dot{width:12px;height:12px;border-radius:50%;background:#d1d5db;display:inline-block}
+  .dot.ok{background:#16a34a}
+  .dot.warn{background:#f59e0b}
+  .dot.err{background:#ef4444}
+  .conn-title{font-weight:700}
+  .conn-sub{font-size:12px;color:var(--muted)}
+  .small{padding:8px 10px;font-size:12px}
+  .table-wrap{overflow:auto}
+  .table{width:100%; border-collapse:collapse}
+  .table th,.table td{border:1px solid #e5e7eb; padding:10px; text-align:left}
+  .table thead th{background:#f3f4f6; font-weight:700}
+</style>
+
+<!-- your old home.js still ok, we just point it to right endpoints below -->
+<script>
+  // Init dashboard auto-refresh (needs /audio_status, /net_detail, /bt_scan, /bt_devices)
+  if (window.SmartAzanHome) {
+    SmartAzanHome.init({
+      endpoints: {
+        audioStatus: '/audio_status',
+        netDetail: '/net_detail',
+        btScan: '/bt_scan',
+        btDevices: '/bt_devices'
+      }
+    });
+  }
+
+  // ---- helpers that now match your new wifi.py ----
+
+  async function refreshNetDetail() {
+    try {
+      const r = await fetch('/net_detail');
+      const j = await r.json();
+
+      // Wi-Fi buttons
+      const wifiState = (j.wifi && j.wifi.state ? j.wifi.state : '').toLowerCase();
+      const btnOn   = document.getElementById('btn-wifi-on');
+      const btnOff  = document.getElementById('btn-wifi-off');
+      const btnScan = document.getElementById('btn-wifi-scan');
+
+      if (btnOn && btnOff && btnScan) {
+        if (wifiState === 'enabled') {
+          btnOn.style.display   = 'none';
+          btnOff.style.display  = 'inline-block';
+          btnScan.style.display = 'inline-block';
+        } else if (wifiState === 'disabled') {
+          btnOn.style.display   = 'inline-block';
+          btnOff.style.display  = 'none';
+          btnScan.style.display = 'none';
+        } else {
+          btnOn.style.display   = 'inline-block';
+          btnOff.style.display  = 'none';
+          btnScan.style.display = 'none';
+        }
+      }
+
+      // hotspot buttons
+      const hsOn  = document.getElementById('btn-hs-on');
+      const hsOff = document.getElementById('btn-hs-off');
+      const hsActive = j.hotspot && j.hotspot.active;
+
+      if (hsOn && hsOff) {
+        if (hsActive) {
+          hsOn.style.display  = 'none';
+          hsOff.style.display = 'inline-block';
+        } else {
+          hsOn.style.display  = 'inline-block';
+          hsOff.style.display = 'inline-block';
+        }
+      }
+
+      // update text
+      const ethSub = document.getElementById('eth-sub');
+      const wifiSub = document.getElementById('wifi-sub');
+      const hsSub   = document.getElementById('hotspot-sub');
+      const ethDot  = document.getElementById('eth-dot');
+      const wifiDot = document.getElementById('wifi-dot');
+      const hsDot   = document.getElementById('hotspot-dot');
+
+      if (ethSub) {
+        const up = j.ethernet && (j.ethernet.up || j.ethernet.ip);
+        ethSub.textContent = up ? ('Connected ' + (j.ethernet.ip || '')) : 'Not connected';
+        if (ethDot) ethDot.className = 'dot ' + (up ? 'ok' : 'err');
+      }
+      if (wifiSub) {
+        let txt = '—';
+        if (j.wifi) {
+          txt = 'Wi-Fi: ' + (j.wifi.state || 'unknown');
+          if (j.wifi.ssid) txt += ' (' + j.wifi.ssid + ')';
+          if (j.wifi.ip) txt += ' · ' + j.wifi.ip;
+        }
+        wifiSub.textContent = txt;
+        if (wifiDot) {
+          const good = j.wifi && j.wifi.connected;
+          wifiDot.className = 'dot ' + (good ? 'ok' : 'warn');
+        }
+      }
+      if (hsSub) {
+        if (hsActive) {
+          hsSub.textContent = 'ON' + (j.hotspot.ip ? ' (' + j.hotspot.ip + ')' : '');
+        } else {
+          hsSub.textContent = 'OFF';
+        }
+        if (hsDot) {
+          hsDot.className = 'dot ' + (hsActive ? 'ok' : 'err');
+        }
+      }
+
+    } catch (e) {
+      console.error('refreshNetDetail failed:', e);
+    }
+  }
+
+  async function setWifi(state) {
+    try {
+      const r = await fetch('/api/wifi/radio', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({state})
+      });
+      const j = await r.json();
+      if (!j.ok) {
+        alert('Wi-Fi toggle failed: ' + (j.error || 'unknown'));
+      }
+      await refreshNetDetail();
+    } catch (e) {
+      alert('Wi-Fi toggle failed: ' + e);
+    }
+  }
+
+  async function scanWifi() {
+    try {
+      await fetch('/scan_wifi', {method: 'POST'});
+      // the actual list you see is in /settings — here we just trigger scan
+    } catch (e) {
+      alert('Wi-Fi scan failed: ' + e);
+    }
+  }
+
+  async function hotspot(action) {
+    // map to real endpoints
+    const url = action === 'start' ? '/start_hotspot' : '/stop_hotspot';
+    try {
+      const r = await fetch(url, {method: 'POST'});
+      const j = await r.json();
+      if (!j.ok) {
+        alert('Hotspot action failed: ' + (j.error || 'unknown'));
+      }
+      await refreshNetDetail();
+    } catch (e) {
+      alert('Hotspot action failed: ' + e);
+    }
+  }
+
+  // BT scan (home button)
+  (function(){
+    const btn = document.getElementById('btn-scan-bt-home');
+    const list = document.getElementById('bt-devices-home');
+
+    async function loadDevices() {
+      const r = await fetch('/bt_devices');
+      const j = await r.json();
+      list.innerHTML = '';
+      (j.devices || []).forEach(d => {
+        const div = document.createElement('div');
+        div.className = 'item row';
+        div.style.justifyContent = 'space-between';
+        const name = (d.name || 'Unknown').replace(/[<>&]/g,'');
+        const mac  = (d.mac  || '').replace(/[<>&]/g,'');
+        div.innerHTML = `
+          <div>${name} — <code>${mac}</code></div>
+          <form method="post" action="{{ url_for('azan.connect_bt_device') }}" class="row">
+            <input type="hidden" name="mac" value="${mac}">
+            <button class="btn small" type="submit">Connect</button>
+          </form>
+        `;
+        list.appendChild(div);
+      });
+    }
+
+    async function startScan() {
+      await fetch('/bt_scan', {method:'POST'});
+      // poll a few times
+      setTimeout(loadDevices, 2000);
+      setTimeout(loadDevices, 4000);
+      setTimeout(loadDevices, 6000);
+    }
+
+    if (btn) btn.addEventListener('click', startScan);
+  })();
+
+  document.addEventListener('DOMContentLoaded', refreshNetDetail);
+  setInterval(refreshNetDetail, 5000);
+</script>
+{% endblock %}

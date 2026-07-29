@@ -1,0 +1,41 @@
+{
+  "lat": 0,
+  "lon": 0,
+  "method": "ISNA",
+  "use_auto": false,
+  "azan_audio": "default_azan.mp3",
+  "azan_audio_per_prayer": {
+    "Fajr": "default_azan.mp3",
+    "Dhuhr": "default_azan.mp3",
+    "Asr": "default_azan.mp3",
+    "Maghrib": "default_azan.mp3",
+    "Isha": "default_azan.mp3"
+  },
+  "duas": [],
+  "friday_dua": {
+    "file": "",
+    "time": ""
+  },
+  "iqama_audio": "iqama.mp3",
+  "output_device": "auto",
+  "audio_output_mode": "auto",
+  "alsa_device": "",
+  "bluetooth_mac": null,
+  "bluetooth_sink": null,
+  "volume": 70,
+  "hotspot_ssid": "SmartAzanPi",
+  "hotspot_password": "changeme123",
+  "hotspot_enabled": false,
+  "auto_hotspot_enabled": false,
+  "wifi_autoconnect": true,
+  "preferred_wifi_ssid": "",
+  "wifi_networks": {},
+  "after_azan_dua": "",
+  "port": 5050,
+  "snapcast_enabled": false,
+  "snapcast_fifo": "/tmp/snapfifo",
+  "snapcast_jsonrpc": "http://127.0.0.1:1780/jsonrpc",
+  "snapcast_group_id": null,
+  "snapcast_duck_to": 35,
+  "snapcast_restore_to": 80
+}

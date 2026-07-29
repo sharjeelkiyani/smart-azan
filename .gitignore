@@ -1,0 +1,14 @@
+# Runtime config - contains real Wi-Fi passwords, Bluetooth MAC, hotspot
+# password. Never commit this; use config.example.json as a template.
+config.json
+
+# User-supplied azan/dua recordings - not redistributed with the repo.
+audio/*
+!audio/.gitkeep
+
+# Generated at runtime
+timetable.csv
+__pycache__/
+*.pyc
+venv/
+*.log

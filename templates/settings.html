@@ -1,0 +1,482 @@
+{% extends "base.html" %}
+{% block title %}Smart Azan · Settings{% endblock %}
+
+{% block content %}
+
+  <!-- Network summary -->
+  <section class="card" id="net-hint">
+    <h2>Network</h2>
+    <div class="row">
+      <div class="pill" id="pill-eth">Ethernet: …</div>
+      <div class="pill" id="pill-wifi">Wi-Fi: …</div>
+      <div class="pill" id="pill-hotspot">Hotspot: …</div>
+    </div>
+    <p class="muted" id="wifi-hint" style="display:none; margin-top:10px">
+      Wi-Fi looks disabled. You can enable it below.
+    </p>
+  </section>
+
+  <!-- Port -->
+  <section class="card">
+    <h2>Web Server Port</h2>
+    <form method="post" action="{{ url_for('azan.settings') }}" class="row">
+      <input type="hidden" name="form_id" value="port">
+      <input class="input" type="number" name="port" min="1024" max="65535"
+             value="{{ cfg.get('port', 5050) }}" required>
+      <button class="btn" type="submit">Save</button>
+    </form>
+  </section>
+
+  <!-- Audio / Bluetooth base settings -->
+  <section class="card">
+    <h2>Audio Output</h2>
+    <form method="post" action="{{ url_for('azan.settings') }}">
+      <input type="hidden" name="form_id" value="audio">
+
+      <div class="row" style="gap:10px">
+        <label>
+          <input type="radio" name="output_device" value="auto"
+                 {% if cfg.get('audio_output_mode', 'auto') == 'auto' %}checked{% endif %}>
+          Auto (recommended)
+        </label>
+        <label>
+          <input type="radio" name="output_device" value="bluetooth"
+                 {% if cfg.get('audio_output_mode') == 'bluetooth' %}checked{% endif %}>
+          Bluetooth
+        </label>
+        <label>
+          <input type="radio" name="output_device" value="pulse"
+                 {% if cfg.get('audio_output_mode') == 'pulse' %}checked{% endif %}>
+          PulseAudio/PipeWire default
+        </label>
+        <label>
+          <input type="radio" name="output_device" value="alsa"
+                 {% if cfg.get('audio_output_mode') == 'alsa' %}checked{% endif %}>
+          ALSA device (jack/USB/HDMI)
+        </label>
+      </div>
+      <p class="muted" style="margin-top:6px">
+        "Auto" uses a connected Bluetooth speaker if there is one, otherwise
+        falls back to a real Pulse/PipeWire sink, otherwise the first ALSA
+        card. Good default for most setups, including Pi Zero boards with no
+        Bluetooth or sound server at all.
+      </p>
+
+      <div class="row" style="margin-top:12px; gap:10px; align-items:center">
+        <label class="label">Volume</label>
+        <input id="vol-slider" type="range" min="0" max="100"
+               value="{{ cfg.get('volume', 70) }}"
+               oninput="document.getElementById('vol-val').textContent=this.value"
+               style="width:240px">
+        <span><strong id="vol-val">{{ cfg.get('volume', 70) }}</strong>%</span>
+        <button class="btn small" type="button" onclick="saveVolume()">Save</button>
+        <span class="muted" id="vol-hint"></span>
+      </div>
+
+      <div class="row" style="margin-top:12px; gap:10px; align-items:center">
+        <input class="input" type="text" name="bluetooth_mac" id="bt-default-mac"
+               placeholder="AA:BB:CC:DD:EE:FF"
+               value="{{ cfg.get('bluetooth_mac', '') }}">
+        <label class="label">BT sink</label>
+        <select class="input" name="bluetooth_sink" style="min-width:220px">
+          <option value="">(auto-detect)</option>
+          {% for s in bt_sinks %}
+            <option value="{{ s.id }}"
+                    {% if cfg.get('bluetooth_sink') == s.id %}selected{% endif %}>
+              {{ s.label }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="row" style="margin-top:12px; gap:10px; align-items:center">
+        <label class="label">ALSA device</label>
+        <select class="input" name="alsa_device" style="min-width:220px">
+          <option value="">(auto-detect)</option>
+          {% for d in alsa_devices %}
+            <option value="{{ d.id }}"
+                    {% if cfg.get('alsa_device') == d.id %}selected{% endif %}>
+              {{ d.label }}
+            </option>
+          {% endfor %}
+        </select>
+        <button class="btn" type="submit">Save audio</button>
+      </div>
+
+      <div class="row" style="margin-top:12px; gap:10px; align-items:center">
+        <button class="btn secondary" type="button" onclick="testAudio()">🔊 Test sound</button>
+        <span class="muted" id="audio-test-hint"></span>
+      </div>
+
+      <p class="muted" style="margin-top:6px">
+        Current BT MAC: <code>{{ cfg.get('bluetooth_mac', '—') }}</code> ·
+        Detected outputs: {{ audio_outputs.outputs|length }} ·
+        Currently resolves to:
+        <code>{{ audio_outputs.resolved_backend or '—' }} / {{ audio_outputs.resolved_target or 'none found' }}</code>
+      </p>
+    </form>
+  </section>
+
+  <!-- Bluetooth scan & connect -->
+  <section class="card">
+    <h2>Bluetooth · Scan &amp; Connect</h2>
+    <div class="row" style="gap:8px">
+      <button id="btn-scan-bt-settings" class="btn primary" type="button">🔎 Scan Bluetooth</button>
+      <button id="btn-stop-bt-scan" class="btn secondary" type="button">⏹ Stop scan</button>
+      <span id="bt-scan-status" class="pill">Idle</span>
+    </div>
+    <div id="bt-device-list-settings" class="list" style="margin-top:10px"></div>
+    <div class="row" style="margin-top:10px; gap:10px">
+      <form method="post" action="{{ url_for('azan.disconnect_bt_device') }}">
+        <button class="btn" type="submit">🔌 Disconnect current</button>
+      </form>
+      <input id="bt-mac-manual" class="input" type="text" placeholder="AA:BB:CC:DD:EE:FF">
+      <button class="btn small" type="button" onclick="trustMac()">✓ Trust</button>
+      <button class="btn small" type="button" onclick="untrustMac()">✗ Untrust</button>
+      <button class="btn small" type="button" onclick="disconnectMac()">🔌 Disc.</button>
+    </div>
+  </section>
+
+  <!-- Wi-Fi & Hotspot -->
+  <section class="card">
+    <h2>Wi-Fi &amp; Hotspot</h2>
+
+    <!-- Preferred Wi-Fi -->
+    <form method="post" action="{{ url_for('azan.settings') }}" class="grid2" style="margin-bottom:14px">
+      <input type="hidden" name="form_id" value="wifi">
+      <div>
+        <label class="label">Preferred Wi-Fi SSID</label>
+        <input class="input" name="preferred_wifi_ssid"
+               value="{{ cfg.get('preferred_wifi_ssid', '') }}"
+               placeholder="MyHomeWiFi">
+      </div>
+      <div>
+        <label class="label">Password (optional)</label>
+        <input class="input" type="password" name="preferred_wifi_password" placeholder="••••••••">
+      </div>
+      <label style="grid-column:1 / -1; margin-top:4px">
+        <input type="checkbox" name="wifi_autoconnect"
+               {% if cfg.get('wifi_autoconnect', True) %}checked{% endif %}>
+        Auto-connect when Wi-Fi is available
+      </label>
+      <div style="grid-column:1 / -1">
+        <button class="btn" type="submit">Save Wi-Fi</button>
+      </div>
+    </form>
+
+    <!-- Actions -->
+    <div class="row" style="gap:10px; margin-bottom:12px">
+      <form id="scan-wifi" method="post" action="{{ url_for('wifi.scan_wifi') }}">
+        <button class="btn" type="submit">🔎 Scan Wi-Fi</button>
+      </form>
+      <span class="pill" id="scan-state">{{ 'SCANNING…' if is_scanning else 'Idle' }}</span>
+      <button class="btn small" type="button" onclick="setWifi('on')">Enable Wi-Fi</button>
+      <button class="btn small" type="button" onclick="setWifi('off')">Disable Wi-Fi</button>
+    </div>
+
+    <!-- Hotspot -->
+    <div class="row" style="gap:10px; margin-bottom:12px">
+      <button class="btn" type="button" onclick="hotspot('start')">📡 Start Hotspot</button>
+      <button class="btn" type="button" onclick="hotspot('stop')">🛑 Stop Hotspot</button>
+    </div>
+
+    <!-- Scan results -->
+    <div id="wifi-list" class="list">
+      {% if scanned_networks %}
+        {% for n in scanned_networks %}
+          <div class="item">
+            <div class="row" style="justify-content:space-between; gap:10px">
+              <div>
+                <strong>{{ n.ssid }}</strong>
+                <div class="muted">{{ n.bssid }} · {{ n.signal }}% · {{ n.security }}</div>
+              </div>
+              <form method="post" action="{{ url_for('wifi.connect_wifi') }}" class="row" style="gap:6px">
+                <input type="hidden" name="ssid" value="{{ n.ssid }}">
+                <input class="input" type="password" name="password" placeholder="Password">
+                <button class="btn success" type="submit">Connect</button>
+              </form>
+            </div>
+          </div>
+        {% endfor %}
+      {% else %}
+        <p class="muted">No networks yet. Tap “Scan Wi-Fi”.</p>
+      {% endif %}
+    </div>
+  </section>
+
+{% endblock %}
+
+{% block body_extra %}
+<script>
+  // ---------- Volume (AJAX) ----------
+  async function saveVolume() {
+    const el = document.getElementById('vol-slider');
+    const hint = document.getElementById('vol-hint');
+    const v = parseInt(el.value, 10);
+    try {
+      const body = new URLSearchParams({ volume: String(v) }).toString();
+      const r = await fetch('{{ url_for("azan.set_volume_ajax") }}', {
+        method: 'POST',
+        headers: {'Content-Type':'application/x-www-form-urlencoded'},
+        body
+      });
+      const j = await r.json();
+      hint.textContent = (j.status === 'success')
+        ? 'Volume set to ' + j.volume + '%'
+        : 'Failed: ' + (j.message || 'unknown');
+    } catch (e) {
+      hint.textContent = 'Failed: ' + e;
+    }
+  }
+
+  // ---------- Audio test (uses whatever is currently selected in the form,
+  // even if not saved yet) ----------
+  async function testAudio() {
+    const hint = document.getElementById('audio-test-hint');
+    hint.textContent = 'Playing test tone…';
+    try {
+      const mode = document.querySelector('input[name="output_device"]:checked').value;
+      const alsaDevice = document.querySelector('select[name="alsa_device"]').value;
+      const btSink = document.querySelector('select[name="bluetooth_sink"]').value;
+      const body = new URLSearchParams({
+        audio_output_mode: mode,
+        alsa_device: alsaDevice,
+        bluetooth_sink: btSink,
+      }).toString();
+      const r = await fetch('{{ url_for("azan.audio_test") }}', {
+        method: 'POST',
+        headers: {'Content-Type':'application/x-www-form-urlencoded'},
+        body
+      });
+      const j = await r.json();
+      hint.textContent = j.ok
+        ? `Played via ${j.backend} -> ${j.target}. Did you hear it?`
+        : `Failed: ${j.error || 'no output device found'}`;
+    } catch (e) {
+      hint.textContent = 'Failed: ' + e;
+    }
+  }
+
+  // ---------- Wi-Fi on/off ----------
+  async function setWifi(state) {
+    try {
+      const r = await fetch('{{ url_for("wifi.api_wifi_radio") }}', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({state})
+      });
+      const j = await r.json();
+      if (!j.ok) {
+        alert(j.error || 'Wi-Fi toggle failed');
+      }
+      await refreshNetSummary();
+    } catch (e) {
+      alert('Wi-Fi toggle failed: ' + e);
+    }
+  }
+
+  // ---------- Hotspot ----------
+  async function hotspot(action) {
+    const url = (action === 'start')
+      ? '{{ url_for("wifi.start_hotspot_route") }}'
+      : '{{ url_for("wifi.stop_hotspot_route") }}';
+    await fetch(url, { method: 'POST' });
+    refreshNetSummary();
+  }
+
+  // ---------- Wi-Fi polling (with "don't overwrite while typing") ----------
+  (function() {
+    const scanState = document.getElementById('scan-state');
+    const wifiList  = document.getElementById('wifi-list');
+    let userTyping  = false;
+
+    wifiList.addEventListener('focusin', (e) => {
+      if (e.target && e.target.matches('input[type="password"]')) {
+        userTyping = true;
+      }
+    });
+    wifiList.addEventListener('focusout', (e) => {
+      if (e.target && e.target.matches('input[type="password"]')) {
+        setTimeout(() => { userTyping = false; }, 300);
+      }
+    });
+
+    async function tick() {
+      try {
+        const r = await fetch('{{ url_for("wifi.wifi_scan_status") }}');
+        const data = await r.json();
+
+        if (scanState) scanState.textContent = data.is_scanning ? 'SCANNING…' : 'Idle';
+
+        if (!data.is_scanning && userTyping) {
+          // skip refresh while user is typing password
+        } else if (Array.isArray(data.networks)) {
+          wifiList.innerHTML = '';
+          data.networks.forEach(n => {
+            const item = document.createElement('div');
+            item.className = 'item';
+            item.innerHTML = `
+              <div class="row" style="justify-content:space-between; gap:10px">
+                <div>
+                  <strong>${n.ssid || ''}</strong>
+                  <div class="muted">${n.bssid || ''} · ${n.signal || ''}% · ${n.security || ''}</div>
+                </div>
+                <form method="post" action="{{ url_for('wifi.connect_wifi') }}" class="row" style="gap:6px">
+                  <input type="hidden" name="ssid" value="${n.ssid || ''}">
+                  <input class="input" type="password" name="password" placeholder="Password">
+                  <button class="btn success" type="submit">Connect</button>
+                </form>
+              </div>
+            `;
+            wifiList.appendChild(item);
+          });
+        }
+      } catch (e) {}
+      setTimeout(tick, 2500);
+    }
+    tick();
+  })();
+
+  // ---------- Bluetooth scan ----------
+  (function() {
+    const scanBtn   = document.getElementById('btn-scan-bt-settings');
+    const stopBtn   = document.getElementById('btn-stop-bt-scan');
+    const statusPill= document.getElementById('bt-scan-status');
+    const list      = document.getElementById('bt-device-list-settings');
+
+    async function post(url, data) {
+      const body = new URLSearchParams();
+      Object.entries(data || {}).forEach(([k,v]) => body.append(k,v));
+      return fetch(url, {method:'POST', body});
+    }
+    async function getJSON(url) {
+      const r = await fetch(url);
+      return r.json();
+    }
+
+    async function startScan() {
+      scanBtn.disabled = true;
+      statusPill.textContent = 'SCANNING…';
+      list.innerHTML = '';
+      try {
+        await post('{{ url_for("bluetooth.bt_scan") }}', {});
+        const started = Date.now();
+        async function poll() {
+          const data = await getJSON('{{ url_for("bluetooth.bt_devices_api") }}');
+          list.innerHTML = '';
+          if (data.devices && data.devices.length) {
+            statusPill.textContent = 'Devices found';
+            data.devices.forEach(d => {
+              const name = (d.name || 'Unknown').replace(/[<>&]/g, '');
+              const mac  = String(d.mac || '').replace(/[<>&]/g, '');
+              const div  = document.createElement('div');
+              div.className = 'item row';
+              div.style.justifyContent = 'space-between';
+              div.innerHTML = `
+                <div>${name} — <code>${mac}</code></div>
+                <div class="row" style="gap:6px">
+                  <form method="post" action="{{ url_for('azan.connect_bt_device') }}" class="row">
+                    <input type="hidden" name="mac" value="${mac}">
+                    <button class="btn success" type="submit">Connect</button>
+                  </form>
+                  <button class="btn small" type="button" onclick="setDefaultMac('${mac}')">Set default</button>
+                </div>
+              `;
+              list.appendChild(div);
+            });
+            return;
+          }
+          if (Date.now() - started < 23000) {
+            setTimeout(poll, 1100);
+          } else {
+            statusPill.textContent = 'No devices';
+          }
+        }
+        poll();
+      } finally {
+        setTimeout(() => { scanBtn.disabled = false; }, 1500);
+      }
+    }
+
+    async function stopScan() {
+      try {
+        await post('{{ url_for("bluetooth.bt_scan_stop") }}', {});
+        statusPill.textContent = 'Stopped';
+      } catch (e) {
+        alert('Failed to stop scan: ' + e);
+      }
+    }
+
+    if (scanBtn) scanBtn.addEventListener('click', startScan);
+    if (stopBtn) stopBtn.addEventListener('click', stopScan);
+  })();
+
+  // helpers for bluetooth manual actions
+  function setDefaultMac(mac) {
+    const inp = document.getElementById('bt-default-mac');
+    if (inp) {
+      inp.value = mac;
+      inp.scrollIntoView({behavior:'smooth', block:'center'});
+    }
+  }
+  async function trustMac() {
+    const mac = document.getElementById('bt-mac-manual').value.trim();
+    if (!mac) return alert('Enter MAC first');
+    const body = new URLSearchParams({mac});
+    const r = await fetch('{{ url_for("bluetooth.bt_trust") }}', {method:'POST', body});
+    const j = await r.json();
+    if (!j.ok) alert('Trust failed: ' + (j.error || 'unknown'));
+  }
+  async function untrustMac() {
+    const mac = document.getElementById('bt-mac-manual').value.trim();
+    if (!mac) return alert('Enter MAC first');
+    const body = new URLSearchParams({mac});
+    const r = await fetch('{{ url_for("bluetooth.bt_untrust") }}', {method:'POST', body});
+    const j = await r.json();
+    if (!j.ok) alert('Untrust failed: ' + (j.error || 'unknown'));
+  }
+  async function disconnectMac() {
+    const mac = document.getElementById('bt-mac-manual').value.trim();
+    if (!mac) return alert('Enter MAC first');
+    const body = new URLSearchParams({mac});
+    const r = await fetch('{{ url_for("bluetooth.bt_disconnect") }}', {method:'POST', body});
+    const j = await r.json();
+    if (!j.ok) alert('Disconnect failed: ' + (j.error || 'unknown'));
+  }
+
+  // ---------- Network pills ----------
+  async function refreshNetSummary() {
+    try {
+      const r = await fetch('{{ url_for("azan.net_detail") }}');
+      const n = await r.json();
+      const pillEth  = document.getElementById('pill-eth');
+      const pillWifi = document.getElementById('pill-wifi');
+      const pillHot  = document.getElementById('pill-hotspot');
+      const hint     = document.getElementById('wifi-hint');
+
+      const ethUp = !!(n.ethernet && (n.ethernet.up || n.ethernet.connected));
+      const wifiState = (n.wifi && n.wifi.state) ? n.wifi.state.toLowerCase() : 'unknown';
+      const hsActive = !!(n.hotspot && n.hotspot.active);
+
+      if (pillEth) pillEth.textContent = 'Ethernet: ' + (ethUp ? 'Connected' : 'Not connected');
+
+      if (pillWifi) {
+        let txt = 'Wi-Fi: ' + wifiState;
+        if (n.wifi && n.wifi.ssid) txt += ' (' + n.wifi.ssid + ')';
+        if (n.wifi && n.wifi.ip)   txt += ' · ' + n.wifi.ip;
+        pillWifi.textContent = txt;
+      }
+
+      if (pillHot) {
+        pillHot.textContent = 'Hotspot: ' + (hsActive ? ('ON' + (n.hotspot.ip ? ' ('+n.hotspot.ip+')' : '')) : 'OFF');
+      }
+
+      if (hint) {
+        hint.style.display = (wifiState === 'disabled') ? '' : 'none';
+      }
+    } catch (e) {}
+  }
+  document.addEventListener('DOMContentLoaded', refreshNetSummary);
+  setInterval(refreshNetSummary, 7000);
+</script>
+{% endblock %}

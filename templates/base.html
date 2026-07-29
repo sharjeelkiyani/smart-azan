@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>{% block title %}Smart Azan{% endblock %}</title>
+
+  <!-- PWA / manifest -->
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#1c2541" />
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+
+  <!-- main styles -->
+  <link rel="stylesheet" href="/static/css/mobile.css" />
+  {% block head_extra %}{% endblock %}
+</head>
+<body>
+  <header class="app-header">
+    <div class="app-title">Smart Azan</div>
+    <!-- theme toggle lives inside header -->
+    <button id="theme-toggle" class="btn" style="margin-left:auto">🌙 Dark</button>
+  </header>
+
+  <main class="container">
+    <div id="flash-area">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="toast {{ category }}">{{ message }}</div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+    </div>
+
+    {% block content %}{% endblock %}
+  </main>
+
+  <nav class="tabbar">
+    <a href="/" class="tab-item" data-path="/">🏠<span>Dashboard</span></a>
+    <a href="/azan" class="tab-item" data-path="/azan">🕋<span>Azan</span></a>
+    <a href="/settings" class="tab-item" data-path="/settings">⚙️<span>Settings</span></a>
+    <a href="/wifi" class="tab-item" data-path="/wifi">📶<span>Wi-Fi</span></a>
+  </nav>
+
+  <script>
+    // Service worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(console.error);
+      });
+    }
+    // Highlight active tab
+    (function(){
+      const p = location.pathname;
+      document.querySelectorAll('.tab-item').forEach(a=>{
+        const t = a.getAttribute('data-path');
+        a.classList.toggle('active', t==='/'? p==='/' : p.startsWith(t));
+      });
+    })();
+  </script>
+  <script src="/static/js/mobile.js"></script>
+  <script src="/static/js/theme.js"></script>
+  {% block body_extra %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Bluetooth Device Scan</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: auto;
+      background: #f9f9f9;
+      padding: 20px;
+    }
+    h1 {
+      color: #333;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+      background: #fff;
+      box-shadow: 0 0 5px #ccc;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    th, td {
+      padding: 12px 15px;
+      text-align: left;
+      border-bottom: 1px solid #ddd;
+    }
+    th {
+      background-color: #333;
+      color: white;
+    }
+    tr:hover {
+      background-color: #f1f1f1;
+    }
+    form {
+      margin: 0;
+    }
+    button {
+      padding: 6px 12px;
+      background-color: #007bff;
+      border: none;
+      color: white;
+      cursor: pointer;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    button:disabled {
+      background-color: #999;
+      cursor: not-allowed;
+    }
+    .info {
+      margin-bottom: 15px;
+      color: #555;
+    }
+    a {
+      color: #007bff;
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <h1>Bluetooth Devices</h1>
+  <p class="info">
+    Make sure your Bluetooth speaker or device (e.g., Amazon Echo Show) is in pairing mode and discoverable.
+  </p>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <ul style="padding:0; list-style:none;">
+      {% for category, message in messages %}
+        <li style="color: {% if category == 'danger' %}red{% elif category == 'warning' %}orange{% else %}green{% endif %};">
+          {{ message }}
+        </li>
+      {% endfor %}
+      </ul>
+    {% endif %}
+  {% endwith %}
+
+  {% if devices %}
+    <table>
+      <thead>
+        <tr>
+          <th>Device Name</th>
+          <th>MAC Address</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for device in devices %}
+        <tr>
+          <td>{{ device.name }}</td>
+          <td>{{ device.mac }}</td>
+          <td>
+            <form action="{{ url_for('pair_bt') }}" method="POST" style="display:inline;">
+              <input type="hidden" name="mac" value="{{ device.mac }}">
+              <button type="submit">Pair & Connect</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p>No Bluetooth devices found. Try refreshing after putting your device in pairing mode.</p>
+  {% endif %}
+
+  <p><a href="{{ url_for('index') }}">Back to Home</a></p>
+</body>
+</html>

@@ -1,0 +1,250 @@
+{% extends "base.html" %}
+{% block title %}Smart Azan · Azan & Schedule{% endblock %}
+
+{% block content %}
+
+  <!-- Today summary -->
+  <section class="card">
+    <h2>Today's Timetable ({{ current_date }} — {{ now.strftime('%A') }})</h2>
+    {% if timetable_today %}
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Prayer</th><th>Azan</th><th>Iqama</th><th>Selected Azan File</th><th>Manual</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% set ap = cfg.get('azan_audio_per_prayer', {}) %}
+            {% set row = timetable_today[0] %}
+            {% for p in ['Fajr','Dhuhr','Asr','Maghrib','Isha'] %}
+              <tr>
+                <td><strong>{{ p }}</strong></td>
+                <td>{{ row.get(p, '-') }}</td>
+                <td>{{ row.get('Iqama_' ~ p, '-') }}</td>
+                <td>{{ ap.get(p, cfg.get('azan_audio','')) or '-' }}</td>
+                <td>
+                  <form method="post" action="/manual_play_azan">
+                    <input type="hidden" name="prayer" value="{{ p }}">
+                    <button class="btn small" type="submit">Play</button>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="muted">No timetable for today. Upload your CSV below.</p>
+    {% endif %}
+  </section>
+
+  <!-- Timetable CSV -->
+  <section class="card">
+    <h2>Upload Timetable CSV</h2>
+    <p class="muted">CSV must include headers: Date, Fajr, Dhuhr, Asr, Maghrib, Isha, Iqama_Fajr, Iqama_Dhuhr, Iqama_Asr, Iqama_Maghrib, Iqama_Isha. Date format: <code>DD/MM/YYYY</code>.</p>
+    <form method="post" action="/upload_csv" enctype="multipart/form-data" class="row gap">
+      <input type="file" name="file" accept=".csv" required>
+      <button class="btn" type="submit">Upload CSV</button>
+    </form>
+  </section>
+
+  <!-- Per-prayer azan files -->
+  <section class="card">
+    <h2>Azan Audio (Per Prayer)</h2>
+    <div class="table-wrap" style="margin-bottom:10px">
+      <table class="table">
+        <thead><tr><th>Prayer</th><th>Current File</th></tr></thead>
+        <tbody>
+          {% set ap = cfg.get('azan_audio_per_prayer', {}) %}
+          {% for p in ['Fajr','Dhuhr','Asr','Maghrib','Isha'] %}
+            <tr>
+              <td>{{ p }}</td>
+              <td>{{ ap.get(p, cfg.get('azan_audio','')) or '-' }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <form method="post" action="/upload_azan_per_prayer" enctype="multipart/form-data" class="grid2 gap">
+      <label>
+        <div class="muted">Select Prayer</div>
+        <select name="prayer" required>
+          <option value="" disabled selected>Choose…</option>
+          <option>Fajr</option>
+          <option>Dhuhr</option>
+          <option>Asr</option>
+          <option>Maghrib</option>
+          <option>Isha</option>
+        </select>
+      </label>
+      <label>
+        <div class="muted">Audio File</div>
+        <input type="file" name="file" accept="audio/*,.mp3,.wav,.ogg" required>
+      </label>
+      <div class="row">
+        <button class="btn" type="submit">Upload / Replace</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- Iqama audio -->
+  <section class="card">
+    <h2>Iqama Audio</h2>
+    <p class="muted">Current: <strong>{{ cfg.get('iqama_audio','iqama.mp3') }}</strong></p>
+    <form method="post" action="/upload_iqama_audio" enctype="multipart/form-data" class="row gap">
+      <input type="file" name="iqama_file" accept="audio/*,.mp3,.wav,.ogg" required>
+      <button class="btn" type="submit">Upload Iqama Audio</button>
+    </form>
+  </section>
+    <section class="card">
+    <h2>Dua After Azan</h2>
+    <p class="muted">Current: <strong>{{ cfg.get('after_azan_dua','-') }}</strong></p>
+    <form method="post" action="/upload_after_azan_dua" enctype="multipart/form-data" class="row gap">
+      <input type="file" name="file" accept="audio/*,.mp3,.wav,.ogg" required>
+      <button class="btn" type="submit">Upload Dua After Azan</button>
+    </form>
+  </section>
+
+  <!-- Scheduled Duas: list + inline edit + add new -->
+  <section class="card">
+    <h2>Scheduled Duas (By Day)</h2>
+    {% set duas = cfg.get('duas', []) %}
+    {% if duas and duas|length > 0 %}
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr><th>Day</th><th>Time</th><th>File</th><th>Actions</th></tr>
+          </thead>
+          <tbody>
+            {% for d in duas %}
+              {% set idx = loop.index0 %}
+              {% set dday = (d.get('day') or 'daily') %}
+              <tr>
+                <td>{{ 'Every day' if dday == 'daily' else dday|capitalize }}</td>
+                <td>{{ d.get('time','') }}</td>
+                <td>{{ d.get('file','') }}</td>
+                <td class="row">
+                  <button class="btn small ghost" type="button" onclick="toggleEdit('{{ idx }}')">Edit</button>
+                  <form method="post" action="/delete_dua" onsubmit="return confirm('Delete this dua?')">
+                    <input type="hidden" name="index" value="{{ idx }}">
+                    <button class="btn small danger" type="submit">Delete</button>
+                  </form>
+                </td>
+              </tr>
+              <!-- Inline Edit Row -->
+              <tr id="edit-row-{{ idx }}" class="edit-row" style="display:none">
+                <td colspan="4">
+                  <form method="post" action="/update_dua" class="grid2 gap">
+                    <input type="hidden" name="index" value="{{ idx }}">
+                    <label>
+                      <div class="muted">Day</div>
+                      <select name="day" required>
+                        {% set days = ['daily','monday','tuesday','wednesday','thursday','friday','saturday','sunday'] %}
+                        {% for day in days %}
+                          <option value="{{ day }}" {% if (d.get('day') or 'daily') == day %}selected{% endif %}>
+                            {{ 'Every day' if day=='daily' else day|capitalize }}
+                          </option>
+                        {% endfor %}
+                      </select>
+                    </label>
+                    <label>
+                      <div class="muted">Time (24h)</div>
+                      <input type="time" name="time" value="{{ d.get('time','') }}" required>
+                    </label>
+                    <div class="row">
+                      <button class="btn" type="submit">Save</button>
+                      <button class="btn ghost" type="button" onclick="toggleEdit('{{ idx }}')">Cancel</button>
+                    </div>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="muted">No scheduled duas yet.</p>
+    {% endif %}
+
+    <!-- Add new Dua -->
+    <form method="post" action="/upload_dua" enctype="multipart/form-data" class="grid2 gap" style="margin-top:12px">
+      <label>
+        <div class="muted">Day</div>
+        <select name="day" required>
+          <option value="daily" selected>Every day</option>
+          <option value="monday">Monday</option>
+          <option value="tuesday">Tuesday</option>
+          <option value="wednesday">Wednesday</option>
+          <option value="thursday">Thursday</option>
+          <option value="friday">Friday</option>
+          <option value="saturday">Saturday</option>
+          <option value="sunday">Sunday</option>
+        </select>
+      </label>
+      <label>
+        <div class="muted">Time (24h)</div>
+        <input type="time" name="time" required>
+      </label>
+      <label>
+        <div class="muted">Audio File</div>
+        <input type="file" name="file" accept="audio/*,.mp3,.wav,.ogg" required>
+      </label>
+      <div class="row">
+        <button class="btn" type="submit">Add Dua</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- Friday Dua -->
+  <section class="card">
+    <h2>Friday Dua</h2>
+    {% set fd = cfg.get('friday_dua', {}) %}
+    <p class="muted">Current: <strong>{{ fd.get('file') or '-' }}</strong> at <strong>{{ fd.get('time') or '-' }}</strong></p>
+
+    <!-- Set/replace Friday dua -->
+    <form method="post" action="/upload_friday_dua" enctype="multipart/form-data" class="grid2 gap">
+      <label>
+        <div class="muted">Time (24h)</div>
+        <input type="time" name="time" required>
+      </label>
+      <label>
+        <div class="muted">Audio File</div>
+        <input type="file" name="file" accept="audio/*,.mp3,.wav,.ogg" required>
+      </label>
+      <div class="row">
+        <button class="btn" type="submit">Set Friday Dua</button>
+      </div>
+    </form>
+
+    <!-- Delete Friday dua (separate form to avoid nested form) -->
+    <form method="post" action="/delete_friday_dua" onsubmit="return confirm('Delete Friday dua?')" class="row" style="margin-top:10px">
+      <button class="btn danger" type="submit">Delete Friday Dua</button>
+    </form>
+  </section>
+
+{% endblock %}
+
+{% block body_extra %}
+<style>
+  .gap{gap:10px}
+  .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+  .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .table-wrap{overflow:auto}
+  .table{width:100%; border-collapse:collapse}
+  .table th,.table td{border:1px solid #e5e7eb; padding:10px; text-align:left}
+  .table thead th{background:#f3f4f6; font-weight:700}
+  .edit-row td{background:#fbfbfd}
+  .btn.small{padding:6px 10px; font-size:.9rem}
+  .btn.ghost{background:#fff;border:1px solid #d1d5db;color:#111}
+  .btn.danger{background:#dc2626;border-color:#dc2626;color:#fff}
+  .muted{color:#6b7280}
+</style>
+<script>
+  function toggleEdit(idx){
+    const row = document.getElementById('edit-row-' + idx);
+    if(row){ row.style.display = (row.style.display === 'none' || row.style.display === '') ? 'table-row' : 'none'; }
+  }
+</script>
+{% endblock %}

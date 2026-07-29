@@ -1,0 +1,18 @@
+[Unit]
+Description=Smart Azan System
+Wants=network-online.target
+After=network-online.target bluetooth.target sound.target
+
+[Service]
+User=__USER__
+Type=simple
+ExecStart=%h/smart_azan_final/venv/bin/python %h/smart_azan_final/app.py
+WorkingDirectory=%h/smart_azan_final
+ExecStartPre=/bin/sleep 3
+Restart=always
+RestartSec=5
+Environment="XDG_RUNTIME_DIR=/run/user/%U"
+Environment="PULSE_SERVER=/run/user/%U/pulse/native"
+
+[Install]
+WantedBy=multi-user.target

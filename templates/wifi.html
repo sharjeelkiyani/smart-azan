@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}Smart Azan · Wi‑Fi{% endblock %}
+{% block content %}
+  <section class="card">
+    <h2>Hotspot</h2>
+    <div class="row">
+      <div id="hotspot-pill" class="pill">
+        Hotspot: {{ 'ON (' ~ hotspot_status.ip ~ ')' if hotspot_status.active else 'OFF' }}
+      </div>
+    </div>
+    <div class="grid2" style="margin-top:10px">
+      <form method="post" action="/start_hotspot">
+        <input type="hidden" name="hotspot_ssid" value="{{ cfg.get('hotspot_ssid','SmartAzanPi') }}">
+        <input type="hidden" name="hotspot_password" value="{{ cfg.get('hotspot_password','') }}">
+        <button class="btn">📡 Start</button>
+      </form>
+      <form method="post" action="/stop_hotspot">
+        <button class="btn">🛑 Stop</button>
+      </form>
+      <form id="stop-scan-wifi" method="post" action="/api/wifi/scan/stop">
+        <button class="btn">🛑 Stop Scan</button>
+      </form>
+
+    </div>
+
+    <form id="auto-hotspot-form" class="row" method="post" action="/toggle_auto_hotspot" style="margin-top:10px">
+      <input type="hidden" name="enable_auto_hotspot" id="enable_auto_hotspot" value="{{ 'true' if cfg.get('auto_hotspot_enabled') else 'false' }}">
+      <label>
+        <input type="checkbox" id="auto_hotspot_chk" {% if cfg.get('auto_hotspot_enabled') %}checked{% endif %}>
+        Enable automatic hotspot when internet is down
+      </label>
+      <button class="btn">Save</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>Wi‑Fi Networks</h2>
+    <div class="row">
+      <form id="scan-wifi" method="post" action="/scan_wifi">
+        <button class="btn primary">🔎 Scan Wi‑Fi</button>
+      </form>
+      <span class="pill" id="scan-state">{{ 'SCANNING…' if is_scanning else 'Idle' }}</span>
+    </div>
+
+    <div id="wifi-list" class="list" style="margin-top:10px">
+      {% for n in scanned_networks %}
+        <div class="item">
+          <div class="row" style="justify-content:space-between">
+            <div>
+              <strong>{{ n.ssid }}</strong>
+              <div class="muted">{{ n.bssid }} · {{ n.signal }}% · {{ n.security }}</div>
+            </div>
+            <form method="post" action="/connect_wifi" class="row">
+              <input class="input" type="hidden" name="ssid" value="{{ n.ssid }}">
+              <input class="input" type="password" name="password" placeholder="Password (if required)">
+              <button class="btn success">Connect</button>
+            </form>
+          </div>
+        </div>
+      {% else %}
+        <p class="muted">No networks yet. Tap "Scan Wi‑Fi".</p>
+      {% endfor %}
+    </div>
+  </section>
+{% endblock %}
+
+{% block body_extra %}
+<script>
+  // Toggle handler for auto hotspot
+  const chk = document.getElementById('auto_hotspot_chk');
+  const hidden = document.getElementById('enable_auto_hotspot');
+  if (chk && hidden){
+    chk.addEventListener('change', () => hidden.value = chk.checked ? 'true' : 'false');
+  }
+
+  // Poll hotspot status
+  const pill = document.getElementById('hotspot-pill');
+  async function refreshHotspot(){
+    try{
+      const r = await fetch('/hotspot_status');
+      const s = await r.json();
+      pill.textContent = 'Hotspot: ' + (s.active ? ('ON ' + (s.ip ? '('+s.ip+')' : '')) : 'OFF');
+    } catch(e){ /* ignore */ }
+  }
+  setInterval(refreshHotspot, 8000);
+
+  // If a scan is running, poll for results to update the list live
+  const scanState = document.getElementById('scan-state');
+  const wifiList = document.getElementById('wifi-list');
+  async function pollWifi(){
+    try{
+      const r = await fetch('/wifi_scan_status');
+      const data = await r.json();
+      scanState.textContent = data.is_scanning ? 'SCANNING…' : 'Idle';
+      if (data.networks && data.networks.length){
+        wifiList.innerHTML = '';
+        data.networks.forEach(n => {
+          const item = document.createElement('div');
+          item.className = 'item';
+          item.innerHTML = `
+            <div class="row" style="justify-content:space-between">
+              <div>
+                <strong>${n.ssid}</strong>
+                <div class="muted">${n.bssid} · ${n.signal}% · ${n.security}</div>
+              </div>
+              <form method="post" action="/connect_wifi" class="row">
+                <input class="input" type="hidden" name="ssid" value="${n.ssid}">
+                <input class="input" type="password" name="password" placeholder="Password (if required)">
+                <button class="btn success">Connect</button>
+              </form>
+            </div>`;
+          wifiList.appendChild(item);
+        });
+      }
+    }catch(e){}
+    setTimeout(pollWifi, 2000);
+  }
+  pollWifi();
+</script>
+{% endblock %}
