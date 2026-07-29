@@ -12,6 +12,7 @@ from flask import Flask, render_template
 import wifi
 import bluetooth
 import routes_azan
+import routes_quran
 import audio_player
 
 # ----------------- constants -----------------
@@ -134,6 +135,8 @@ try:
     )
 except TypeError:
     routes_azan.init(app, config_lock, load_config, save_config)
+
+routes_quran.init(app, config_lock, load_config, save_config, audio_folder=AUDIO_FOLDER)
 
 # start wifi background daemons (autoconnect + hotspot)
 # (this calls monitor_network_and_hotspot() inside wifi.py)

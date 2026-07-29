@@ -9,8 +9,10 @@
         el=document.createElement('style'); el.id='dark-vars';
         el.textContent=`
         :root[data-theme="dark"]{
-          --bg:#0b1020; --card:#141a2a; --text:#f1f5f9; --muted:#94a3b8;
-          --primary:#7aa2ff; --success:#22c55e; --shadow:0 6px 20px rgba(0,0,0,.4);
+          --bg:#07130f; --card:#0f231b; --text:#eef7f1; --muted:#9db8a9;
+          --primary:#2fbf82; --primary-dark:#0b6e4f; --gold:#e0bf5a;
+          --success:#34d399; --danger:#f87171; --border:#1c3a2c;
+          --shadow:0 6px 20px rgba(0,0,0,.5);
         }`;
         document.head.appendChild(el);
       }

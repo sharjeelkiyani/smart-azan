@@ -8,6 +8,7 @@ audio/*
 
 # Generated at runtime
 timetable.csv
+quran_state.json
 __pycache__/
 *.pyc
 venv/

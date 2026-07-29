@@ -25,7 +25,7 @@ echo "==> Installing system packages (ffmpeg, ALSA, PulseAudio/PipeWire client t
 sudo apt-get update
 sudo apt-get install -y \
   python3 python3-venv python3-pip \
-  ffmpeg alsa-utils pulseaudio-utils \
+  ffmpeg mpg123 mpv alsa-utils pulseaudio-utils \
   bluez network-manager
 
 echo "==> Creating Python virtual environment..."

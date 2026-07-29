@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}Smart Azan · Quran & Live{% endblock %}
+
+{% block content %}
+
+  <section class="card">
+    <h2>Now Playing</h2>
+    <div id="now-playing" class="now-playing">
+      <div class="np-title" id="np-title">Nothing playing</div>
+      <div class="np-progress-wrap">
+        <input id="np-seek" type="range" min="0" max="100" value="0" step="1">
+        <div class="np-time">
+          <span id="np-pos">0:00</span><span id="np-dur">0:00</span>
+        </div>
+      </div>
+      <div class="row" style="gap:8px;margin-top:10px">
+        <button class="btn primary" id="np-playpause" type="button" onclick="togglePlayPause()">▶ Play</button>
+        <button class="btn secondary" type="button" onclick="doStop()">⏹ Stop</button>
+        <button class="btn ghost" type="button" onclick="doRestart()">⏮ Restart</button>
+      </div>
+      <p class="muted" style="margin-top:8px">
+        Stop remembers your position - it picks up right where you left off next time.
+      </p>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Quran Recitations</h2>
+    <div class="list">
+      {% for t in tracks %}
+        <div class="item track-row {{ 'playing' if status.current_id == t.id else '' }}" data-track-id="{{ t.id }}">
+          <div class="track-name">{{ t.title }}</div>
+          <div class="row" style="gap:6px">
+            <button class="btn small primary" type="button" onclick="playTrack('{{ t.id }}')">▶ Play</button>
+            <form method="post" action="{{ url_for('quran.quran_remove', track_id=t.id) }}"
+                  onsubmit="return confirm('Remove this track?')">
+              <button class="btn small ghost" type="submit">Remove</button>
+            </form>
+          </div>
+        </div>
+      {% else %}
+        <p class="muted">No Quran tracks yet - upload a file or add a stream URL below.</p>
+      {% endfor %}
+    </div>
+
+    <div class="section-title" style="margin-top:16px">Upload a recitation file</div>
+    <form method="post" action="{{ url_for('quran.quran_upload') }}" enctype="multipart/form-data" class="card-form">
+      <input class="input" type="text" name="title" placeholder="Title (e.g. Surah Yaseen)">
+      <input class="input" type="file" name="file" accept="audio/*" required style="margin-top:8px">
+      <button class="btn primary" type="submit" style="margin-top:10px">Upload</button>
+    </form>
+
+    <div class="section-title" style="margin-top:16px">Add a streaming URL</div>
+    <form method="post" action="{{ url_for('quran.quran_add_url') }}" class="card-form">
+      <input class="input" type="text" name="title" placeholder="Title">
+      <input class="input" type="text" name="url" placeholder="https://... (mp3/m3u8 stream)" required style="margin-top:8px">
+      <button class="btn primary" type="submit" style="margin-top:10px">Add</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>Listen Live · Makkah &amp; Madinah</h2>
+    <p class="muted">
+      Add the live audio stream URL for Masjid al-Haram (Makkah) or Masjid an-Nabawi (Madinah).
+      Live streams just play/stop - there's no position to resume since it's a live broadcast.
+    </p>
+    <div class="list">
+      {% for t in live_tracks %}
+        <div class="item track-row {{ 'playing' if status.current_id == t.id else '' }}" data-track-id="{{ t.id }}">
+          <div class="track-name">🔴 {{ t.title }}</div>
+          <button class="btn small primary" type="button" onclick="playTrack('{{ t.id }}')">▶ Play</button>
+          <form method="post" action="{{ url_for('quran.quran_remove', track_id=t.id) }}"
+                onsubmit="return confirm('Remove this stream?')">
+            <button class="btn small ghost" type="submit">Remove</button>
+          </form>
+        </div>
+      {% else %}
+        <p class="muted">No live streams added yet.</p>
+      {% endfor %}
+    </div>
+
+    <form method="post" action="{{ url_for('quran.quran_add_url') }}" class="card-form" style="margin-top:12px">
+      <input class="input" type="text" name="title" placeholder="e.g. Makkah Live">
+      <input class="input" type="text" name="url" placeholder="https://... (live stream URL)" required style="margin-top:8px">
+      <label style="display:flex;align-items:center;gap:8px;margin-top:8px">
+        <input type="checkbox" name="live" checked> This is a live broadcast
+      </label>
+      <button class="btn primary" type="submit" style="margin-top:10px">Add live stream</button>
+    </form>
+  </section>
+
+{% endblock %}
+
+{% block body_extra %}
+<script>
+  function fmtTime(s) {
+    s = Math.max(0, Math.floor(s || 0));
+    const m = Math.floor(s / 60), sec = s % 60;
+    return `${m}:${String(sec).padStart(2, '0')}`;
+  }
+
+  let seeking = false;
+
+  async function refreshStatus() {
+    try {
+      const r = await fetch('{{ url_for("quran.quran_status") }}');
+      const j = await r.json();
+      document.getElementById('np-playpause').textContent = j.playing ? '⏸ Pause' : '▶ Play';
+      document.getElementById('np-pos').textContent = fmtTime(j.position);
+      document.getElementById('np-dur').textContent = fmtTime(j.duration);
+      if (!seeking) {
+        const pct = j.duration > 0 ? (j.position / j.duration) * 100 : 0;
+        document.getElementById('np-seek').value = pct;
+      }
+      document.querySelectorAll('.track-row').forEach(el => el.classList.remove('playing'));
+      if (j.current_id) {
+        document.querySelectorAll(`[data-track-id="${j.current_id}"]`).forEach(el => el.classList.add('playing'));
+      }
+    } catch (e) { /* ignore transient poll errors */ }
+  }
+
+  async function playTrack(id) {
+    await fetch(`/quran/play/${id}`, {method: 'POST'});
+    refreshStatus();
+  }
+
+  async function togglePlayPause() {
+    const playing = document.getElementById('np-playpause').textContent.includes('Pause');
+    await fetch(playing ? '{{ url_for("quran.quran_pause") }}' : '{{ url_for("quran.quran_resume") }}', {method: 'POST'});
+    refreshStatus();
+  }
+
+  async function doStop() {
+    await fetch('{{ url_for("quran.quran_stop") }}', {method: 'POST'});
+    refreshStatus();
+  }
+
+  async function doRestart() {
+    await fetch('{{ url_for("quran.quran_restart") }}', {method: 'POST'});
+    refreshStatus();
+  }
+
+  document.getElementById('np-seek').addEventListener('mousedown', () => seeking = true);
+  document.getElementById('np-seek').addEventListener('touchstart', () => seeking = true);
+  document.getElementById('np-seek').addEventListener('change', async (e) => {
+    const r = await fetch('{{ url_for("quran.quran_status") }}');
+    const j = await r.json();
+    const target = (e.target.value / 100) * (j.duration || 0);
+    await fetch('{{ url_for("quran.quran_seek") }}', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: new URLSearchParams({position: String(target)}).toString(),
+    });
+    seeking = false;
+    refreshStatus();
+  });
+
+  refreshStatus();
+  setInterval(refreshStatus, 2000);
+</script>
+{% endblock %}
