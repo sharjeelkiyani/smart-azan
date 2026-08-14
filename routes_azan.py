@@ -424,6 +424,13 @@ def settings():
                 bt_sink = request.form.get("bluetooth_sink", "")
                 cfg["bluetooth_sink"] = bt_sink
 
+            elif form_id == "location":
+                try:
+                    cfg["lat"] = float(request.form.get("lat", 0))
+                    cfg["lon"] = float(request.form.get("lon", 0))
+                except (TypeError, ValueError):
+                    flash("Invalid latitude/longitude.", "danger")
+
             elif form_id == "jumma":
                 fd = cfg.get("friday_dua") or {}
                 fd["khutbah_time"] = (request.form.get("khutbah_time") or "").strip()

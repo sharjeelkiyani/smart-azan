@@ -64,10 +64,9 @@
           <div class="pill">🔽 {{ weather.pressure_hpa }} hPa</div>
         </div>
       {% else %}
-        <p class="muted">
-          No location set yet. Add your latitude/longitude on the
-          <a href="{{ url_for('azan.settings') }}">Settings</a> page to see live weather here.
-        </p>
+        <p class="muted">No location set yet.</p>
+        <button class="btn primary small" type="button" onclick="useMyLocationForWeather()">📍 Use My Location</button>
+        <p class="muted" id="weather-location-hint" style="margin-top:8px"></p>
       {% endif %}
     </section>
 
@@ -290,6 +289,28 @@
     } catch (e) {
       hint.textContent = 'Could not check time sync.';
     }
+  }
+
+  function useMyLocationForWeather() {
+    const hint = document.getElementById('weather-location-hint');
+    if (!hint) return;
+    if (!('geolocation' in navigator)) { hint.textContent = 'Geolocation is not supported on this device.'; return; }
+    hint.textContent = 'Getting your location…';
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const body = new URLSearchParams({
+          lat: String(pos.coords.latitude), lon: String(pos.coords.longitude),
+        }).toString();
+        const r = await fetch('{{ url_for("dashboard.qibla_save_location") }}', {
+          method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body
+        });
+        const j = await r.json();
+        if (j.ok) { hint.textContent = 'Location saved - refreshing…'; location.reload(); }
+        else { hint.textContent = 'Failed to save location.'; }
+      },
+      (err) => { hint.textContent = 'Could not get GPS location: ' + err.message; },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
   }
 </script>
 {% endblock %}
