@@ -2,9 +2,10 @@
 import os
 import json
 import csv
+import subprocess
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from flask import Flask, render_template
 
@@ -13,7 +14,10 @@ import wifi
 import bluetooth
 import routes_azan
 import routes_quran
+import routes_dashboard
 import audio_player
+import history_log
+import islamic_utils
 
 # ----------------- constants -----------------
 AUDIO_FOLDER = "audio"
@@ -45,13 +49,14 @@ def load_config():
                 "Isha": "default_azan.mp3",
             },
             "duas": [],
-            "friday_dua": {"file": "", "time": ""},
+            "friday_dua": {"file": "", "time": "", "khutbah_time": ""},
             "iqama_audio": "iqama.mp3",
             "output_device": "auto",
             "audio_output_mode": "auto",
             "alsa_device": "",
             "bluetooth_mac": None,
             "bluetooth_sink": None,
+            "speaker_name": "Main Speaker",
             "volume": 70,
             "hotspot_ssid": "SmartAzanPi",
             "hotspot_password": "changeme123",
@@ -62,6 +67,8 @@ def load_config():
             "wifi_networks": {},
             "after_azan_dua": "",
             "port": 5050,
+            "notifications_enabled": True,
+            "reminder_minutes_before_azan": 10,
         }
         save_config(cfg)
         return cfg
@@ -74,14 +81,18 @@ def load_config():
     cfg.setdefault("azan_audio_per_prayer", {})
     cfg.setdefault("duas", [])
     cfg.setdefault("friday_dua", {"file": "", "time": ""})
+    cfg["friday_dua"].setdefault("khutbah_time", "")
     cfg.setdefault("output_device", "auto")
     cfg.setdefault("audio_output_mode", cfg.get("output_device", "auto"))
     cfg.setdefault("alsa_device", "")
+    cfg.setdefault("speaker_name", "Main Speaker")
     cfg.setdefault("volume", 70)
     cfg.setdefault("port", 5050)
     cfg.setdefault("wifi_networks", {})
     cfg.setdefault("wifi_autoconnect", True)
     cfg.setdefault("after_azan_dua", "")
+    cfg.setdefault("notifications_enabled", True)
+    cfg.setdefault("reminder_minutes_before_azan", 10)
 
     save_config(cfg)
     return cfg
@@ -137,6 +148,7 @@ except TypeError:
     routes_azan.init(app, config_lock, load_config, save_config)
 
 routes_quran.init(app, config_lock, load_config, save_config, audio_folder=AUDIO_FOLDER)
+routes_dashboard.init(app, config_lock, load_config, save_config, timetable_file=TIMETABLE_FILE)
 
 # start wifi background daemons (autoconnect + hotspot)
 # (this calls monitor_network_and_hotspot() inside wifi.py)
@@ -185,11 +197,13 @@ threading.Thread(target=_bluetooth_autoconnect_loop, daemon=True).start()
 
 
 # ----------------- audio for scheduler -----------------
-def play_audio(filename):
+def play_audio(filename, event_type="manual", label=None):
     path = os.path.join(AUDIO_FOLDER, filename)
     with config_lock:
         cfg_now = load_config()
-    audio_player.play(path, cfg_now)
+    ok = audio_player.play(path, cfg_now)
+    history_log.log_event(event_type, label or event_type, filename, ok)
+    return ok
 
 
 # ----------------- scheduler thread -----------------
@@ -233,14 +247,14 @@ def scheduler():
                                                 prayer, current_cfg["azan_audio"]
                                             )
                                             print(f"[Scheduler] Playing {prayer} azan ({azan_file})")
-                                            play_audio(azan_file)
+                                            play_audio(azan_file, "azan", f"{prayer} azan")
                                             played_events.add(eid)
 
                                             # after-azan dua
                                             after_dua = (current_cfg.get("after_azan_dua") or "").strip()
                                             if after_dua:
                                                 print(f"[Scheduler] Playing after-azan dua ({after_dua})")
-                                                play_audio(after_dua)
+                                                play_audio(after_dua, "dua", f"Dua after {prayer} azan")
                                     except Exception as e:
                                         print(f"[Scheduler] azan time parse error {prayer} ({pt}):", e)
 
@@ -258,7 +272,7 @@ def scheduler():
                                         if abs((iq_dt - now).total_seconds()) < 30 and iq_eid not in played_events:
                                             iq_file = current_cfg.get("iqama_audio", "iqama.mp3")
                                             print(f"[Scheduler] Playing {prayer} iqama ({iq_file})")
-                                            play_audio(iq_file)
+                                            play_audio(iq_file, "iqama", f"{prayer} iqama")
                                             played_events.add(iq_eid)
                                     except Exception as e:
                                         print(f"[Scheduler] iqama time parse error {prayer} ({iq_time}):", e)
@@ -280,7 +294,7 @@ def scheduler():
                 eid = f"dua_{i}_{current_minute_str}"
                 if eid not in played_events:
                     print(f"[Scheduler] Playing dua {file_} for {day} at {t}")
-                    play_audio(file_)
+                    play_audio(file_, "dua", f"Dua ({day} {t})")
                     played_events.add(eid)
 
         # --- 3) Friday special ---
@@ -292,39 +306,106 @@ def scheduler():
                 eid = f"friday_{current_minute_str}"
                 if eid not in played_events:
                     print(f"[Scheduler] Playing Friday dua {ffile}")
-                    play_audio(ffile)
+                    play_audio(ffile, "friday_dua", "Friday dua")
                     played_events.add(eid)
 
         time.sleep(10)
 
 
-# ----------------- index -----------------
+@app.context_processor
+def _inject_globals():
+    return {"hijri_today": islamic_utils.hijri_date_string(datetime.now())}
+
+
+def _read_timetable_row(date_str):
+    if not os.path.exists(TIMETABLE_FILE):
+        return None
+    try:
+        with open(TIMETABLE_FILE) as csvfile:
+            for row in csv.DictReader(csvfile):
+                if (row.get("Date") or "").strip() == date_str:
+                    return row
+    except Exception as e:
+        print("[Index] timetable read error:", e)
+    return None
+
+
+PRAYER_NAMES = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]
+
+
+def _compute_next_prayer(now):
+    """Returns (name, datetime) of the next upcoming prayer, looking at
+    today's remaining prayers first and tomorrow's Fajr as a fallback."""
+    today_row = _read_timetable_row(now.strftime("%d/%m/%Y"))
+    today_times = []
+    if today_row:
+        for p in PRAYER_NAMES:
+            t = (today_row.get(p) or "").strip()
+            if not t:
+                continue
+            try:
+                dt = datetime.strptime(f"{now.strftime('%Y/%m/%d')} {t}", "%Y/%m/%d %H:%M")
+            except ValueError:
+                continue
+            today_times.append({"name": p, "time": t, "dt": dt})
+
+    upcoming = [t for t in today_times if t["dt"] > now]
+    past = [t for t in today_times if t["dt"] <= now]
+    prev_dt = max((t["dt"] for t in past), default=now - timedelta(hours=6))
+    if upcoming:
+        nxt = min(upcoming, key=lambda t: t["dt"])
+        return nxt["name"], nxt["dt"], today_times, today_row, prev_dt
+
+    tomorrow = now + timedelta(days=1)
+    tomorrow_row = _read_timetable_row(tomorrow.strftime("%d/%m/%Y"))
+    if tomorrow_row:
+        t = (tomorrow_row.get("Fajr") or "").strip()
+        if t:
+            try:
+                dt = datetime.strptime(f"{tomorrow.strftime('%Y/%m/%d')} {t}", "%Y/%m/%d %H:%M")
+                return "Fajr", dt, today_times, today_row, prev_dt
+            except ValueError:
+                pass
+    return None, None, today_times, today_row, prev_dt
+
+
+def _ntp_status():
+    try:
+        out = subprocess.run(["timedatectl", "show"], capture_output=True, text=True, timeout=3).stdout
+        info = dict(line.split("=", 1) for line in out.splitlines() if "=" in line)
+        return info.get("NTPSynchronized") == "yes"
+    except Exception:
+        return None
+
+
+# ----------------- index / overview dashboard -----------------
 @app.route("/")
 def index():
-    today_str = datetime.now().strftime("%d/%m/%Y")
-    timetable = []
-    if os.path.exists(TIMETABLE_FILE):
-        try:
-            with open(TIMETABLE_FILE) as csvfile:
-                for row in csv.DictReader(csvfile):
-                    if (row.get("Date") or "").strip() == today_str:
-                        timetable.append(row)
-                        break
-        except Exception as e:
-            print("[Index] timetable read error:", e)
+    now = datetime.now()
+    today_str = now.strftime("%d/%m/%Y")
 
     with config_lock:
         current_cfg = load_config()
 
-    bt_devices = bluetooth.get_scanned_devices()
+    next_prayer, next_prayer_dt, today_times, today_row, prev_prayer_dt = _compute_next_prayer(now)
+    weather = islamic_utils.get_weather(current_cfg.get("lat"), current_cfg.get("lon"))
+    audio_devices = audio_player.list_outputs(current_cfg)
+    recent_history = history_log.get_recent(6)
 
     return render_template(
-        "index.html",
+        "overview.html",
         cfg=current_cfg,
-        timetable=timetable,
-        bt_devices=bt_devices,
+        today_times=today_times,
+        today_row=today_row,
+        next_prayer=next_prayer,
+        next_prayer_iso=next_prayer_dt.isoformat() if next_prayer_dt else None,
+        prev_prayer_iso=prev_prayer_dt.isoformat() if prev_prayer_dt else None,
+        weather=weather,
+        audio_devices=audio_devices,
+        ntp_synced=_ntp_status(),
+        recent_history=recent_history,
         current_date=today_str,
-        now=datetime.now(),
+        now=now,
     )
 
 

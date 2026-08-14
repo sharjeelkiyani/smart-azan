@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Smart Azan · Notifications{% endblock %}
+
+{% block content %}
+  <section class="card">
+    <h2>🔔 Notifications</h2>
+    <form method="post">
+      <label class="row" style="justify-content:space-between">
+        <span>Enable Azan notifications</span>
+        <input type="checkbox" name="notifications_enabled" {{ 'checked' if cfg.get('notifications_enabled') }}>
+      </label>
+      <div class="row" style="justify-content:space-between;margin-top:12px">
+        <span>Reminder before Azan</span>
+        <select class="input" style="max-width:160px" name="reminder_minutes_before_azan">
+          {% for m in [0, 5, 10, 15, 20, 30] %}
+            <option value="{{ m }}" {{ 'selected' if cfg.get('reminder_minutes_before_azan') == m }}>
+              {{ 'No reminder' if m == 0 else m ~ ' minutes' }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <button class="btn primary" type="submit" style="margin-top:14px">Save</button>
+    </form>
+    <p class="muted" style="margin-top:14px">
+      Browser notifications fire while this page/app is open in a tab, based on today's timetable -
+      they won't wake a closed browser in the background. For a always-on reminder, keep this page
+      open on a tablet/screen near your speaker.
+    </p>
+    <button class="btn secondary" type="button" id="enable-browser-notif">🔔 Enable browser notifications on this device</button>
+    <p class="muted" id="notif-hint" style="margin-top:8px"></p>
+  </section>
+{% endblock %}
+
+{% block body_extra %}
+<script>
+  document.getElementById('enable-browser-notif').addEventListener('click', async () => {
+    const hint = document.getElementById('notif-hint');
+    if (!('Notification' in window)) { hint.textContent = 'This browser does not support notifications.'; return; }
+    const perm = await Notification.requestPermission();
+    hint.textContent = perm === 'granted' ? 'Notifications enabled on this device.' : 'Permission not granted.';
+  });
+</script>
+{% endblock %}

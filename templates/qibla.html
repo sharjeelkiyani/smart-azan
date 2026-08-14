@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Smart Azan · Qibla Finder{% endblock %}
+
+{% block content %}
+  <section class="card" style="text-align:center">
+    <h2>🧭 Qibla Finder</h2>
+    {% if bearing is not none %}
+      <p class="muted">Direction to the Kaaba from your configured location:</p>
+      <div class="compass-wrap">
+        <div class="compass-face">
+          <div class="compass-n">N</div>
+          <div class="compass-needle" id="qibla-needle" style="transform: rotate({{ bearing }}deg)">🕋</div>
+        </div>
+      </div>
+      <div class="qibla-bearing">{{ '%.1f'|format(bearing) }}°</div>
+      <p class="muted">from true north, measured clockwise</p>
+      <p class="muted" id="compass-hint">
+        On a phone with a compass sensor, tap below to align this using your device's orientation.
+      </p>
+      <button class="btn primary" type="button" onclick="enableDeviceCompass()">📱 Use Device Compass</button>
+    {% else %}
+      <p class="muted">
+        No location configured yet. Set your latitude/longitude on the
+        <a href="{{ url_for('azan.settings') }}">Settings</a> page to calculate your Qibla direction.
+      </p>
+    {% endif %}
+  </section>
+{% endblock %}
+
+{% block body_extra %}
+<style>
+  .compass-wrap { display: flex; justify-content: center; margin: 20px 0; }
+  .compass-face {
+    width: 220px; height: 220px; border-radius: 50%;
+    border: 3px solid var(--border);
+    background: var(--bg);
+    position: relative;
+  }
+  .compass-n { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); font-weight: 800; color: var(--muted); }
+  .compass-needle {
+    position: absolute; top: 50%; left: 50%;
+    width: 0; height: 0;
+    font-size: 34px;
+    transform-origin: center 6px;
+    margin-top: -6px; margin-left: -17px;
+    transition: transform 0.3s ease;
+  }
+  .qibla-bearing { font-size: 30px; font-weight: 800; color: var(--primary); margin-top: 10px; }
+</style>
+<script>
+  const QIBLA_BEARING = {{ (bearing or 0)|tojson }};
+  function enableDeviceCompass() {
+    const hint = document.getElementById('compass-hint');
+    function handle(e) {
+      let heading = e.webkitCompassHeading != null ? e.webkitCompassHeading : (360 - e.alpha);
+      const rel = (QIBLA_BEARING - heading + 360) % 360;
+      document.getElementById('qibla-needle').style.transform = `rotate(${rel}deg)`;
+      hint.textContent = 'Rotate your device so the Kaaba icon points up.';
+    }
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+      DeviceOrientationEvent.requestPermission().then(state => {
+        if (state === 'granted') window.addEventListener('deviceorientation', handle);
+        else hint.textContent = 'Compass permission denied.';
+      }).catch(() => { hint.textContent = 'Compass not available on this device.'; });
+    } else if ('DeviceOrientationEvent' in window) {
+      window.addEventListener('deviceorientationabsolute', handle) || window.addEventListener('deviceorientation', handle);
+    } else {
+      hint.textContent = 'This device/browser does not support compass orientation.';
+    }
+  }
+</script>
+{% endblock %}

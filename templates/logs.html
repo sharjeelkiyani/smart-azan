@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Smart Azan · Logs & History{% endblock %}
+
+{% block content %}
+  <section class="card">
+    <h2>📋 Logs &amp; History</h2>
+    <p class="muted">Recent azan, iqama, and dua playback events (most recent first).</p>
+    <div class="list">
+      {% for e in events %}
+        <div class="item row" style="justify-content:space-between">
+          <div>
+            <strong>{{ e.label }}</strong>
+            <div class="muted" style="font-size:12px">{{ e.ts }} · {{ e.file }}</div>
+          </div>
+          {% if e.success %}
+            <span class="pill" style="background:rgba(52,211,153,.15);color:var(--success)">✓ Played</span>
+          {% else %}
+            <span class="pill" style="background:rgba(248,113,113,.15);color:var(--danger)">✗ Failed</span>
+          {% endif %}
+        </div>
+      {% else %}
+        <p class="muted">No events logged yet.</p>
+      {% endfor %}
+    </div>
+  </section>
+{% endblock %}

@@ -17,28 +17,62 @@
   {% block head_extra %}{% endblock %}
 </head>
 <body>
-  <header class="app-header">
+  <!-- Mobile-only top bar (hidden on desktop, sidebar takes over) -->
+  <header class="app-header mobile-only">
     <div class="app-title">Smart Azan</div>
-    <!-- theme toggle lives inside header -->
     <button id="theme-toggle" class="btn" style="margin-left:auto">🌙 Dark</button>
   </header>
 
-  <main class="container">
-    <div id="flash-area">
-      {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-          {% for category, message in messages %}
-            <div class="toast {{ category }}">{{ message }}</div>
-          {% endfor %}
-        {% endif %}
-      {% endwith %}
-    </div>
+  <div class="app-shell">
+    <!-- Desktop sidebar (hidden on mobile, top bar + bottom tabs take over) -->
+    <aside class="sidebar desktop-only">
+      <div class="sidebar-brand">
+        <span class="brand-icon">🕌</span>
+        <span class="brand-text">Smart <span class="accent">Azan</span></span>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="/" class="nav-item" data-path="/">🏠<span>Overview</span></a>
+        <a href="/prayer-times" class="nav-item" data-path="/prayer-times">🕐<span>Prayer Times</span></a>
+        <a href="/azan" class="nav-item" data-path="/azan">🕋<span>Azan Settings</span></a>
+        <a href="/masjid-speakers" class="nav-item" data-path="/masjid-speakers">🔊<span>Masjid / Speakers</span></a>
+        <a href="/quran" class="nav-item" data-path="/quran">📖<span>Quran &amp; Live</span></a>
+        <a href="/qibla" class="nav-item" data-path="/qibla">🧭<span>Qibla Finder</span></a>
+        <a href="/calendar" class="nav-item" data-path="/calendar">📅<span>Calendar</span></a>
+        <a href="/logs" class="nav-item" data-path="/logs">📋<span>Logs &amp; History</span></a>
+        <a href="/notifications" class="nav-item" data-path="/notifications">🔔<span>Notifications</span></a>
+        <a href="/integrations" class="nav-item" data-path="/integrations">🔌<span>Integrations</span></a>
+        <a href="/wifi" class="nav-item" data-path="/wifi">📶<span>Wi-Fi</span></a>
+        <a href="/settings" class="nav-item" data-path="/settings">⚙️<span>Settings</span></a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="sidebar-clock" id="sidebar-clock">--:--</div>
+        <div class="sidebar-date" id="sidebar-date"></div>
+        <div class="sidebar-hijri">{{ hijri_today }}</div>
+        <label class="night-mode-row">
+          <span>🌙 Night Mode</span>
+          <input type="checkbox" id="theme-toggle-sidebar">
+        </label>
+      </div>
+    </aside>
 
-    {% block content %}{% endblock %}
-  </main>
+    <main class="main-content">
+      <div id="flash-area">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, message in messages %}
+              <div class="toast {{ category }}">{{ message }}</div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+      </div>
 
-  <nav class="tabbar">
-    <a href="/" class="tab-item" data-path="/">🏠<span>Dashboard</span></a>
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+
+  <!-- Mobile-only bottom tabs -->
+  <nav class="tabbar mobile-only">
+    <a href="/" class="tab-item" data-path="/">🏠<span>Home</span></a>
     <a href="/azan" class="tab-item" data-path="/azan">🕋<span>Azan</span></a>
     <a href="/quran" class="tab-item" data-path="/quran">📖<span>Quran</span></a>
     <a href="/settings" class="tab-item" data-path="/settings">⚙️<span>Settings</span></a>
@@ -52,13 +86,26 @@
         navigator.serviceWorker.register('/sw.js').catch(console.error);
       });
     }
-    // Highlight active tab
+    // Highlight active nav item (both sidebar and mobile tabs)
     (function(){
       const p = location.pathname;
-      document.querySelectorAll('.tab-item').forEach(a=>{
+      document.querySelectorAll('.tab-item, .nav-item').forEach(a=>{
         const t = a.getAttribute('data-path');
         a.classList.toggle('active', t==='/'? p==='/' : p.startsWith(t));
       });
+    })();
+    // Sidebar clock / date / Hijri date
+    (function(){
+      const clockEl = document.getElementById('sidebar-clock');
+      const dateEl = document.getElementById('sidebar-date');
+      if (!clockEl) return;
+      function tick(){
+        const now = new Date();
+        clockEl.textContent = now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+        dateEl.textContent = now.toLocaleDateString([], {weekday:'long', year:'numeric', month:'long', day:'numeric'});
+      }
+      tick();
+      setInterval(tick, 1000 * 30);
     })();
   </script>
   <script src="/static/js/mobile.js"></script>

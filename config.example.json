@@ -14,7 +14,8 @@
   "duas": [],
   "friday_dua": {
     "file": "",
-    "time": ""
+    "time": "",
+    "khutbah_time": ""
   },
   "iqama_audio": "iqama.mp3",
   "output_device": "auto",
@@ -22,6 +23,7 @@
   "alsa_device": "",
   "bluetooth_mac": null,
   "bluetooth_sink": null,
+  "speaker_name": "Main Speaker",
   "volume": 70,
   "hotspot_ssid": "SmartAzanPi",
   "hotspot_password": "changeme123",

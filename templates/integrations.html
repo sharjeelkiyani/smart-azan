@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Smart Azan · Integrations{% endblock %}
+
+{% block content %}
+  <section class="card">
+    <h2>🔌 Snapcast (Multi-room audio)</h2>
+    <p class="muted">
+      Stores connection settings for a Snapcast server on your network so this app can duck/restore
+      its volume during azan. This saves the settings below; it does not yet route azan audio
+      through Snapcast itself - that would need Snapcast installed and configured separately.
+    </p>
+    <form method="post">
+      <label class="row" style="justify-content:space-between">
+        <span>Enable Snapcast integration</span>
+        <input type="checkbox" name="snapcast_enabled" {{ 'checked' if cfg.get('snapcast_enabled') }}>
+      </label>
+      <div class="row" style="margin-top:10px">
+        <label class="muted" style="min-width:140px">FIFO path</label>
+        <input class="input" type="text" name="snapcast_fifo" value="{{ cfg.get('snapcast_fifo', '/tmp/snapfifo') }}">
+      </div>
+      <div class="row" style="margin-top:10px">
+        <label class="muted" style="min-width:140px">JSON-RPC URL</label>
+        <input class="input" type="text" name="snapcast_jsonrpc" value="{{ cfg.get('snapcast_jsonrpc', '') }}">
+      </div>
+      <div class="row" style="margin-top:10px">
+        <label class="muted" style="min-width:140px">Duck volume to</label>
+        <input class="input" type="number" min="0" max="100" name="snapcast_duck_to" value="{{ cfg.get('snapcast_duck_to', 35) }}">
+        <label class="muted" style="min-width:140px">Restore volume to</label>
+        <input class="input" type="number" min="0" max="100" name="snapcast_restore_to" value="{{ cfg.get('snapcast_restore_to', 80) }}">
+      </div>
+      <button class="btn primary" type="submit" style="margin-top:14px">Save</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>More integrations</h2>
+    <p class="muted">Coming later: Google Calendar sync, Alexa routines. Let me know what you'd like prioritized.</p>
+  </section>
+{% endblock %}

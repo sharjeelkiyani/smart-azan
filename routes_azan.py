@@ -14,6 +14,7 @@ from flask import (
 import wifi
 import bluetooth
 import audio_player
+import history_log
 
 bp = Blueprint("azan", __name__)
 
@@ -58,12 +59,14 @@ def _ensure_audio_folder():
         os.makedirs(_AUDIO_FOLDER, exist_ok=True)
 
 
-def _play_audio(filename: str):
+def _play_audio(filename: str, event_type: str = "manual", label: str = None):
     _ensure_audio_folder()
     path = os.path.join(_AUDIO_FOLDER, filename)
     with _config_lock:
         cfg = _load_config()
-    audio_player.play(path, cfg)
+    ok = audio_player.play(path, cfg)
+    history_log.log_event(event_type, label or event_type, filename, ok)
+    return ok
 
 
 def _bluez_card_name_for_mac(mac):
@@ -189,7 +192,7 @@ def manual_play_azan():
             audio_file = current_cfg["azan_audio_per_prayer"].get(
                 prayer, current_cfg["azan_audio"]
             )
-        _play_audio(audio_file)
+        _play_audio(audio_file, "manual", f"{prayer} azan (manual test)")
         flash(f"{prayer} azan played.", "success")
     return redirect(url_for("azan.azan_page"))
 
@@ -420,6 +423,12 @@ def settings():
 
                 bt_sink = request.form.get("bluetooth_sink", "")
                 cfg["bluetooth_sink"] = bt_sink
+
+            elif form_id == "jumma":
+                fd = cfg.get("friday_dua") or {}
+                fd["khutbah_time"] = (request.form.get("khutbah_time") or "").strip()
+                fd["time"] = (request.form.get("friday_dua_time") or fd.get("time") or "").strip()
+                cfg["friday_dua"] = fd
 
             elif form_id == "wifi":  # <-- add this form in settings.html
                 ssid = (request.form.get("preferred_wifi_ssid") or "").strip()

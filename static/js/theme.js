@@ -20,6 +20,8 @@
     try{ localStorage.setItem(KEY, theme); }catch(e){}
     const btn=document.getElementById('theme-toggle');
     if(btn) btn.textContent = (theme==='dark') ? '🌙 Dark' : '☀️ Light';
+    const check=document.getElementById('theme-toggle-sidebar');
+    if(check) check.checked = (theme==='dark');
   }
   function init(){
     let saved=null;
@@ -30,6 +32,10 @@
     if(btn){ btn.addEventListener('click', ()=>{
       const now=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';
       apply(now);
+    });}
+    const check=document.getElementById('theme-toggle-sidebar');
+    if(check){ check.addEventListener('change', ()=>{
+      apply(check.checked ? 'dark' : 'light');
     });}
   }
   document.addEventListener('DOMContentLoaded', init);
