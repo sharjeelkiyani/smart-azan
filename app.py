@@ -150,16 +150,34 @@ if hasattr(wifi, "start_background_threads"):
 # power/range - without this, azan silently "plays" to whatever ALSA/HDMI
 # fallback auto mode picks instead, and nothing is heard until someone
 # manually reconnects from Settings.
+#
+# Checking via bluetoothctl's interactive shell (spawned fresh each time) is
+# slow enough that it can itself race with bluetoothd ("Waiting to connect to
+# bluetoothd...") and misreport an already-connected device as disconnected -
+# which then fires a real `connect` at a live A2DP link and can knock it
+# offline for real. Checking whether PipeWire/Pulse currently has a sink for
+# this MAC is a single fast query with no such race, so it's used as the
+# primary signal; bluetoothctl is only invoked when that says nothing is
+# connected.
 def _bluetooth_autoconnect_loop():
+    misses = 0
     while True:
         with config_lock:
             c = load_config()
         mac = c.get("bluetooth_mac")
         mode = (c.get("audio_output_mode") or "auto").lower()
-        if mac and mode in ("bluetooth", "auto") and not bluetooth.is_connected(mac):
-            print(f"[Bluetooth] {mac} not connected, attempting reconnect…")
-            bluetooth.ensure_bluetooth_ready()
-            bluetooth.run_bluetoothctl_cmd(["connect", mac])
+        if mac and mode in ("bluetooth", "auto"):
+            if audio_player.bluetooth_sink_for_mac(mac):
+                misses = 0
+            else:
+                misses += 1
+                # require two consecutive misses before acting, in case a
+                # sink is just briefly absent right as playback starts/stops
+                if misses >= 2:
+                    print(f"[Bluetooth] {mac} not connected, attempting reconnect…")
+                    bluetooth.ensure_bluetooth_ready()
+                    bluetooth.run_bluetoothctl_cmd(["connect", mac])
+                    misses = 0
         time.sleep(30)
 
 
