@@ -101,6 +101,20 @@ def qibla_page():
     return render_template("qibla.html", bearing=bearing, lat=lat, lon=lon)
 
 
+@bp.route("/qibla/save_location", methods=["POST"])
+def qibla_save_location():
+    try:
+        lat = float(request.form.get("lat"))
+        lon = float(request.form.get("lon"))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "invalid coordinates"}), 400
+    cfg = _cfg()
+    cfg["lat"] = lat
+    cfg["lon"] = lon
+    _save(cfg)
+    return jsonify({"ok": True, "lat": lat, "lon": lon})
+
+
 # ----------------- Calendar -----------------
 
 @bp.route("/calendar")

@@ -35,7 +35,7 @@
   "after_azan_dua": "",
   "port": 5050,
   "snapcast_enabled": false,
-  "snapcast_fifo": "/tmp/snapfifo",
+  "snapcast_fifo": "/tmp/smartazan.fifo",
   "snapcast_jsonrpc": "http://127.0.0.1:1780/jsonrpc",
   "snapcast_group_id": null,
   "snapcast_duck_to": 35,

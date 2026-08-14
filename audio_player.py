@@ -16,13 +16,18 @@ first so the same device-targeting works regardless of source format
 (mp3/wav/ogg/...) and regardless of whether the system runs PipeWire,
 classic PulseAudio, or plain ALSA only (Pi Zero with no sound server).
 """
+import json
 import os
 import shutil
 import subprocess
+import time
+import urllib.request
 
 PLAY_TIMEOUT = 1800  # seconds - generous cap (30 min); only meant to catch a
                       # genuinely hung process, not to bound real recordings
                       # (a full azan/Quran recitation can run several minutes)
+
+SNAPCAST_SAMPLE_RATE = 48000  # must match the [stream] sampleformat in snapserver.conf
 
 _HAS = {}
 
@@ -260,6 +265,87 @@ def _play_once(path, backend, target, timeout):
         _play_via_decode_to_tempfile(path, backend, target, timeout)
 
 
+# ---------------------------------------------------------------------
+# Snapcast (multi-room) playback
+#
+# When enabled, azan/dua/Quran audio is written as raw PCM into the FIFO
+# snapserver reads its stream from, instead of playing directly to a local
+# device - snapserver then fans it out to every connected snapclient
+# (including one running locally on this Pi, so this speaker keeps working
+# even with just one "room"). This replaces direct playback rather than
+# running alongside it, since doing both would play the same clip twice.
+# ---------------------------------------------------------------------
+
+def _snapcast_rpc(url, method, params=None, timeout=3):
+    body = json.dumps({"id": 1, "jsonrpc": "2.0", "method": method, "params": params or {}}).encode()
+    req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.loads(r.read().decode())
+
+
+def _snapcast_set_all_client_volumes(jsonrpc_url, percent):
+    try:
+        status = _snapcast_rpc(jsonrpc_url, "Server.GetStatus")
+        groups = status.get("result", {}).get("server", {}).get("groups", [])
+        for g in groups:
+            for client in g.get("clients", []):
+                cid = client.get("id")
+                if not cid:
+                    continue
+                _snapcast_rpc(jsonrpc_url, "Client.SetVolume",
+                               {"id": cid, "volume": {"percent": percent, "muted": False}})
+    except Exception as e:
+        print(f"[Snapcast] volume control error: {e}")
+
+
+def play_via_snapcast(path, cfg, timeout=PLAY_TIMEOUT):
+    """Returns True/False; only meaningful when cfg['snapcast_enabled'] - the
+    caller decides whether to use this or direct playback."""
+    fifo_path = cfg.get("snapcast_fifo") or "/tmp/smartazan.fifo"
+    if not os.path.exists(fifo_path):
+        print(f"[Snapcast] fifo not found at {fifo_path} - is snapserver running?")
+        return False
+    if not _which("ffmpeg"):
+        print("[Snapcast] ffmpeg not available, cannot decode for snapcast")
+        return False
+
+    jsonrpc_url = cfg.get("snapcast_jsonrpc")
+    duck_to = cfg.get("snapcast_duck_to", 35)
+    restore_to = cfg.get("snapcast_restore_to", 80)
+    if jsonrpc_url:
+        _snapcast_set_all_client_volumes(jsonrpc_url, duck_to)
+
+    decode = None
+    try:
+        decode_cmd = ["ffmpeg", "-v", "error", "-i", path, "-f", "s16le",
+                      "-ar", str(SNAPCAST_SAMPLE_RATE), "-ac", "2", "-"]
+        decode = subprocess.Popen(decode_cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        # Plain open(path, "wb") implies O_CREAT|O_TRUNC, which the kernel
+        # rejects on a FIFO owned by another user even with 0666 perms - a
+        # bare O_WRONLY (no create/truncate) is all a FIFO write needs.
+        fifo_fd = os.open(fifo_path, os.O_WRONLY)
+        try:
+            with os.fdopen(fifo_fd, "wb") as fifo:
+                while True:
+                    chunk = decode.stdout.read(65536)
+                    if not chunk:
+                        break
+                    fifo.write(chunk)
+        except BrokenPipeError:
+            pass
+        decode.wait(timeout=10)
+        return True
+    except Exception as e:
+        print(f"[Snapcast] playback error: {e}")
+        return False
+    finally:
+        if decode is not None and decode.poll() is None:
+            decode.kill()
+        if jsonrpc_url:
+            time.sleep(1)  # let the last buffered chunk drain before restoring volume
+            _snapcast_set_all_client_volumes(jsonrpc_url, restore_to)
+
+
 def play(path, cfg, timeout=PLAY_TIMEOUT, attempts=PLAY_ATTEMPTS):
     """Play one audio file according to cfg's output settings. Never raises -
     logs and returns False on any failure so a caller loop (like the
@@ -273,6 +359,12 @@ def play(path, cfg, timeout=PLAY_TIMEOUT, attempts=PLAY_ATTEMPTS):
     if not os.path.isfile(path):
         print(f"[Audio] missing file: {path}")
         return False
+
+    if cfg.get("snapcast_enabled"):
+        if play_via_snapcast(path, cfg, timeout):
+            print(f"[Audio] played '{path}' via snapcast")
+            return True
+        print(f"[Audio] snapcast playback failed for '{path}', falling back to direct output")
 
     backend, target = resolve_target(cfg)
     if not backend or not target:

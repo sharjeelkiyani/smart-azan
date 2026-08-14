@@ -173,6 +173,7 @@ if hasattr(wifi, "start_background_threads"):
 # connected.
 def _bluetooth_autoconnect_loop():
     misses = 0
+    last_default_set = None
     while True:
         with config_lock:
             c = load_config()
@@ -190,6 +191,21 @@ def _bluetooth_autoconnect_loop():
                     bluetooth.ensure_bluetooth_ready()
                     bluetooth.run_bluetoothctl_cmd(["connect", mac])
                     misses = 0
+
+        # Keep PipeWire/Pulse's *default* sink pointed at whatever
+        # audio_player resolves to. Our own playback always targets a
+        # device explicitly, so this doesn't affect it - it exists for
+        # secondary consumers that don't support explicit device selection
+        # (snapclient's pulse backend only ever plays to "default").
+        backend, target = audio_player.resolve_target(c)
+        if backend == "pulse" and target and target != last_default_set:
+            try:
+                subprocess.run(["pactl", "set-default-sink", target], timeout=5, check=True)
+                last_default_set = target
+                print(f"[Audio] default sink set to {target}")
+            except Exception as e:
+                print(f"[Audio] set-default-sink error: {e}")
+
         time.sleep(30)
 
 

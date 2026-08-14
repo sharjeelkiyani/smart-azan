@@ -4,26 +4,35 @@
 {% block content %}
   <section class="card" style="text-align:center">
     <h2>🧭 Qibla Finder</h2>
-    {% if bearing is not none %}
-      <p class="muted">Direction to the Kaaba from your configured location:</p>
-      <div class="compass-wrap">
-        <div class="compass-face">
-          <div class="compass-n">N</div>
-          <div class="compass-needle" id="qibla-needle" style="transform: rotate({{ bearing }}deg)">🕋</div>
-        </div>
+    <p class="muted" id="qibla-source">
+      {% if bearing is not none %}
+        Direction to the Kaaba from your saved location ({{ '%.4f'|format(lat) }}, {{ '%.4f'|format(lon) }}).
+      {% else %}
+        No location saved yet - tap "Use My GPS Location" below, or set one on the
+        <a href="{{ url_for('azan.settings') }}">Settings</a> page.
+      {% endif %}
+    </p>
+
+    <div class="compass-wrap">
+      <div class="compass-face">
+        <div class="compass-n">N</div>
+        <div class="compass-needle" id="qibla-needle"
+             style="transform: rotate({{ bearing or 0 }}deg); {{ '' if bearing is not none else 'opacity:.25' }}">🕋</div>
       </div>
-      <div class="qibla-bearing">{{ '%.1f'|format(bearing) }}°</div>
-      <p class="muted">from true north, measured clockwise</p>
-      <p class="muted" id="compass-hint">
-        On a phone with a compass sensor, tap below to align this using your device's orientation.
-      </p>
-      <button class="btn primary" type="button" onclick="enableDeviceCompass()">📱 Use Device Compass</button>
-    {% else %}
-      <p class="muted">
-        No location configured yet. Set your latitude/longitude on the
-        <a href="{{ url_for('azan.settings') }}">Settings</a> page to calculate your Qibla direction.
-      </p>
-    {% endif %}
+    </div>
+    <div class="qibla-bearing" id="qibla-bearing-text">
+      {{ ('%.1f'|format(bearing) ~ '°') if bearing is not none else '—' }}
+    </div>
+    <p class="muted">from true north, measured clockwise</p>
+
+    <div class="row" style="justify-content:center;gap:8px;flex-wrap:wrap;margin-top:10px">
+      <button class="btn primary" type="button" onclick="useGpsLocation()">📍 Use My GPS Location</button>
+      <button class="btn secondary" type="button" id="btn-save-location" style="display:none" onclick="saveLocation()">
+        💾 Save as my default location
+      </button>
+      <button class="btn ghost" type="button" onclick="enableDeviceCompass()">📱 Use Device Compass</button>
+    </div>
+    <p class="muted" id="compass-hint" style="margin-top:10px"></p>
   </section>
 {% endblock %}
 
@@ -48,9 +57,65 @@
   .qibla-bearing { font-size: 30px; font-weight: 800; color: var(--primary); margin-top: 10px; }
 </style>
 <script>
-  const QIBLA_BEARING = {{ (bearing or 0)|tojson }};
+  let QIBLA_BEARING = {{ (bearing or 0)|tojson }};
+  let hasBearing = {{ 'true' if bearing is not none else 'false' }};
+  let pendingLat = null, pendingLon = null;
+
+  const KAABA_LAT = 21.4225, KAABA_LON = 39.8262;
+  function toRad(d) { return d * Math.PI / 180; }
+  function toDeg(r) { return r * 180 / Math.PI; }
+
+  function computeQiblaBearing(lat, lon) {
+    const lat1 = toRad(lat), lon1 = toRad(lon);
+    const lat2 = toRad(KAABA_LAT), lon2 = toRad(KAABA_LON);
+    const dLon = lon2 - lon1;
+    const x = Math.sin(dLon) * Math.cos(lat2);
+    const y = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+    return (toDeg(Math.atan2(x, y)) + 360) % 360;
+  }
+
+  function renderBearing(bearing) {
+    QIBLA_BEARING = bearing;
+    hasBearing = true;
+    document.getElementById('qibla-needle').style.transform = `rotate(${bearing}deg)`;
+    document.getElementById('qibla-needle').style.opacity = 1;
+    document.getElementById('qibla-bearing-text').textContent = bearing.toFixed(1) + '°';
+  }
+
+  function useGpsLocation() {
+    const hint = document.getElementById('compass-hint');
+    if (!('geolocation' in navigator)) { hint.textContent = 'Geolocation is not supported on this device.'; return; }
+    hint.textContent = 'Getting your location…';
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        pendingLat = pos.coords.latitude;
+        pendingLon = pos.coords.longitude;
+        const bearing = computeQiblaBearing(pendingLat, pendingLon);
+        renderBearing(bearing);
+        document.getElementById('qibla-source').textContent =
+          `Direction to the Kaaba from your current GPS location (${pendingLat.toFixed(4)}, ${pendingLon.toFixed(4)}, ±${Math.round(pos.coords.accuracy)}m).`;
+        document.getElementById('btn-save-location').style.display = 'inline-block';
+        hint.textContent = '';
+      },
+      (err) => { hint.textContent = 'Could not get GPS location: ' + err.message; },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }
+
+  async function saveLocation() {
+    const hint = document.getElementById('compass-hint');
+    if (pendingLat == null) return;
+    const body = new URLSearchParams({lat: String(pendingLat), lon: String(pendingLon)}).toString();
+    const r = await fetch('{{ url_for("dashboard.qibla_save_location") }}', {
+      method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body
+    });
+    const j = await r.json();
+    hint.textContent = j.ok ? 'Saved as your default location - weather and future visits will use this too.' : 'Failed to save.';
+  }
+
   function enableDeviceCompass() {
     const hint = document.getElementById('compass-hint');
+    if (!hasBearing) { hint.textContent = 'Get a Qibla bearing first (GPS or saved location).'; return; }
     function handle(e) {
       let heading = e.webkitCompassHeading != null ? e.webkitCompassHeading : (360 - e.alpha);
       const rel = (QIBLA_BEARING - heading + 360) % 360;
