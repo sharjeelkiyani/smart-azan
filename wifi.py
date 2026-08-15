@@ -380,12 +380,12 @@ def scan_wifi():
     with wifi_lock:
         if wifi_scanning_enabled:
             flash("Wi-Fi scan already in progress.", "info")
-            return redirect(url_for("azan.settings"))  # 👈 back to settings
+            return redirect(url_for("wifi.wifi_page"))
         wifi_scanning_enabled = True
         scanned_wifi_networks.clear()
     threading.Thread(target=scan_wifi_networks_background, daemon=True).start()
     flash("Wi-Fi scan started.", "success")
-    return redirect(url_for("azan.settings"))  # 👈 stay on settings
+    return redirect(url_for("wifi.wifi_page"))
 
 
 
@@ -412,6 +412,29 @@ def connect_wifi():
         # important: we still saved to config even if nmcli failed
         flash(f"Saved Wi-Fi for {ssid}, but connect failed: {msg}", "warning")
 
+    return redirect(url_for("wifi.wifi_page"))
+
+
+@bp.route("/save_hotspot_config", methods=["POST"])
+def save_hotspot_config():
+    """Saves hotspot SSID/password without starting it - lets you set a real
+    password up front instead of only being able to change it as a side
+    effect of starting the hotspot."""
+    ssid = (request.form.get("hotspot_ssid") or "").strip()
+    pw = request.form.get("hotspot_password") or ""
+    if not ssid:
+        flash("Hotspot name (SSID) is required.", "danger")
+        return redirect(url_for("wifi.wifi_page"))
+    if pw and len(pw) < 8:
+        flash("Hotspot password must be at least 8 characters (WPA2 requirement).", "danger")
+        return redirect(url_for("wifi.wifi_page"))
+    with _config_lock:
+        current = _load_config()
+        current["hotspot_ssid"] = ssid
+        if pw:
+            current["hotspot_password"] = pw
+        _save_config(current)
+    flash("Hotspot settings saved. Restart the hotspot for changes to take effect if it's currently running.", "success")
     return redirect(url_for("wifi.wifi_page"))
 
 

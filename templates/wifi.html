@@ -8,19 +8,28 @@
         Hotspot: {{ 'ON (' ~ hotspot_status.ip ~ ')' if hotspot_status.active else 'OFF' }}
       </div>
     </div>
-    <div class="grid2" style="margin-top:10px">
-      <form method="post" action="/start_hotspot">
-        <input type="hidden" name="hotspot_ssid" value="{{ cfg.get('hotspot_ssid','SmartAzanPi') }}">
-        <input type="hidden" name="hotspot_password" value="{{ cfg.get('hotspot_password','') }}">
+
+    <form method="post" action="{{ url_for('wifi.save_hotspot_config') }}" class="grid2" style="margin-top:12px">
+      <div>
+        <label class="label">Hotspot name (SSID)</label>
+        <input class="input" type="text" name="hotspot_ssid" value="{{ cfg.get('hotspot_ssid', 'SmartAzanPi') }}" required>
+      </div>
+      <div>
+        <label class="label">Hotspot password (min. 8 characters)</label>
+        <input class="input" type="password" name="hotspot_password" placeholder="Leave blank to keep current password">
+      </div>
+      <div style="grid-column:1 / -1">
+        <button class="btn primary" type="submit">Save Hotspot Settings</button>
+      </div>
+    </form>
+
+    <div class="grid2" style="margin-top:14px">
+      <form method="post" action="{{ url_for('wifi.start_hotspot_route') }}">
         <button class="btn">📡 Start</button>
       </form>
-      <form method="post" action="/stop_hotspot">
+      <form method="post" action="{{ url_for('wifi.stop_hotspot_route') }}">
         <button class="btn">🛑 Stop</button>
       </form>
-      <form id="stop-scan-wifi" method="post" action="/api/wifi/scan/stop">
-        <button class="btn">🛑 Stop Scan</button>
-      </form>
-
     </div>
 
     <form id="auto-hotspot-form" class="row" method="post" action="/toggle_auto_hotspot" style="margin-top:10px">
@@ -30,6 +39,31 @@
         Enable automatic hotspot when internet is down
       </label>
       <button class="btn">Save</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>Preferred Wi-Fi</h2>
+    <form method="post" action="{{ url_for('azan.settings') }}" class="grid2">
+      <input type="hidden" name="form_id" value="wifi">
+      <div>
+        <label class="label">Preferred Wi-Fi SSID</label>
+        <input class="input" name="preferred_wifi_ssid"
+               value="{{ cfg.get('preferred_wifi_ssid', '') }}"
+               placeholder="MyHomeWiFi">
+      </div>
+      <div>
+        <label class="label">Password (optional)</label>
+        <input class="input" type="password" name="preferred_wifi_password" placeholder="••••••••">
+      </div>
+      <label style="grid-column:1 / -1; margin-top:4px">
+        <input type="checkbox" name="wifi_autoconnect"
+               {% if cfg.get('wifi_autoconnect', True) %}checked{% endif %}>
+        Auto-connect when Wi-Fi is available
+      </label>
+      <div style="grid-column:1 / -1">
+        <button class="btn primary" type="submit">Save</button>
+      </div>
     </form>
   </section>
 

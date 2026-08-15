@@ -161,72 +161,9 @@
     </div>
   </section>
 
-  <!-- Wi-Fi & Hotspot -->
-  <section class="card">
-    <h2>Wi-Fi &amp; Hotspot</h2>
-
-    <!-- Preferred Wi-Fi -->
-    <form method="post" action="{{ url_for('azan.settings') }}" class="grid2" style="margin-bottom:14px">
-      <input type="hidden" name="form_id" value="wifi">
-      <div>
-        <label class="label">Preferred Wi-Fi SSID</label>
-        <input class="input" name="preferred_wifi_ssid"
-               value="{{ cfg.get('preferred_wifi_ssid', '') }}"
-               placeholder="MyHomeWiFi">
-      </div>
-      <div>
-        <label class="label">Password (optional)</label>
-        <input class="input" type="password" name="preferred_wifi_password" placeholder="••••••••">
-      </div>
-      <label style="grid-column:1 / -1; margin-top:4px">
-        <input type="checkbox" name="wifi_autoconnect"
-               {% if cfg.get('wifi_autoconnect', True) %}checked{% endif %}>
-        Auto-connect when Wi-Fi is available
-      </label>
-      <div style="grid-column:1 / -1">
-        <button class="btn" type="submit">Save Wi-Fi</button>
-      </div>
-    </form>
-
-    <!-- Actions -->
-    <div class="row" style="gap:10px; margin-bottom:12px">
-      <form id="scan-wifi" method="post" action="{{ url_for('wifi.scan_wifi') }}">
-        <button class="btn" type="submit">🔎 Scan Wi-Fi</button>
-      </form>
-      <span class="pill" id="scan-state">{{ 'SCANNING…' if is_scanning else 'Idle' }}</span>
-      <button class="btn small" type="button" onclick="setWifi('on')">Enable Wi-Fi</button>
-      <button class="btn small" type="button" onclick="setWifi('off')">Disable Wi-Fi</button>
-    </div>
-
-    <!-- Hotspot -->
-    <div class="row" style="gap:10px; margin-bottom:12px">
-      <button class="btn" type="button" onclick="hotspot('start')">📡 Start Hotspot</button>
-      <button class="btn" type="button" onclick="hotspot('stop')">🛑 Stop Hotspot</button>
-    </div>
-
-    <!-- Scan results -->
-    <div id="wifi-list" class="list">
-      {% if scanned_networks %}
-        {% for n in scanned_networks %}
-          <div class="item">
-            <div class="row" style="justify-content:space-between; gap:10px">
-              <div>
-                <strong>{{ n.ssid }}</strong>
-                <div class="muted">{{ n.bssid }} · {{ n.signal }}% · {{ n.security }}</div>
-              </div>
-              <form method="post" action="{{ url_for('wifi.connect_wifi') }}" class="row" style="gap:6px">
-                <input type="hidden" name="ssid" value="{{ n.ssid }}">
-                <input class="input" type="password" name="password" placeholder="Password">
-                <button class="btn success" type="submit">Connect</button>
-              </form>
-            </div>
-          </div>
-        {% endfor %}
-      {% else %}
-        <p class="muted">No networks yet. Tap “Scan Wi-Fi”.</p>
-      {% endif %}
-    </div>
-  </section>
+  <p class="muted" style="margin-top:4px">
+    Wi-Fi networks and hotspot settings moved to the <a href="{{ url_for('wifi.wifi_page') }}">Wi-Fi</a> page.
+  </p>
 
 {% endblock %}
 
@@ -344,86 +281,6 @@
       hint.textContent = 'Failed: ' + e;
     }
   }
-
-  // ---------- Wi-Fi on/off ----------
-  async function setWifi(state) {
-    try {
-      const r = await fetch('{{ url_for("wifi.api_wifi_radio") }}', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({state})
-      });
-      const j = await r.json();
-      if (!j.ok) {
-        alert(j.error || 'Wi-Fi toggle failed');
-      }
-      await refreshNetSummary();
-    } catch (e) {
-      alert('Wi-Fi toggle failed: ' + e);
-    }
-  }
-
-  // ---------- Hotspot ----------
-  async function hotspot(action) {
-    const url = (action === 'start')
-      ? '{{ url_for("wifi.start_hotspot_route") }}'
-      : '{{ url_for("wifi.stop_hotspot_route") }}';
-    await fetch(url, { method: 'POST' });
-    refreshNetSummary();
-  }
-
-  // ---------- Wi-Fi polling (with "don't overwrite while typing") ----------
-  (function() {
-    const scanState = document.getElementById('scan-state');
-    const wifiList  = document.getElementById('wifi-list');
-    let userTyping  = false;
-
-    wifiList.addEventListener('focusin', (e) => {
-      if (e.target && e.target.matches('input[type="password"]')) {
-        userTyping = true;
-      }
-    });
-    wifiList.addEventListener('focusout', (e) => {
-      if (e.target && e.target.matches('input[type="password"]')) {
-        setTimeout(() => { userTyping = false; }, 300);
-      }
-    });
-
-    async function tick() {
-      try {
-        const r = await fetch('{{ url_for("wifi.wifi_scan_status") }}');
-        const data = await r.json();
-
-        if (scanState) scanState.textContent = data.is_scanning ? 'SCANNING…' : 'Idle';
-
-        if (!data.is_scanning && userTyping) {
-          // skip refresh while user is typing password
-        } else if (Array.isArray(data.networks)) {
-          wifiList.innerHTML = '';
-          data.networks.forEach(n => {
-            const item = document.createElement('div');
-            item.className = 'item';
-            item.innerHTML = `
-              <div class="row" style="justify-content:space-between; gap:10px">
-                <div>
-                  <strong>${n.ssid || ''}</strong>
-                  <div class="muted">${n.bssid || ''} · ${n.signal || ''}% · ${n.security || ''}</div>
-                </div>
-                <form method="post" action="{{ url_for('wifi.connect_wifi') }}" class="row" style="gap:6px">
-                  <input type="hidden" name="ssid" value="${n.ssid || ''}">
-                  <input class="input" type="password" name="password" placeholder="Password">
-                  <button class="btn success" type="submit">Connect</button>
-                </form>
-              </div>
-            `;
-            wifiList.appendChild(item);
-          });
-        }
-      } catch (e) {}
-      setTimeout(tick, 2500);
-    }
-    tick();
-  })();
 
   // ---------- Bluetooth scan ----------
   (function() {
