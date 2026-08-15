@@ -553,6 +553,21 @@ def set_volume_ajax():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
+@bp.route("/set_gain", methods=["POST"])
+def set_gain_ajax():
+    try:
+        gain = int(request.form.get("gain"))
+        if not (0 <= gain <= 12):
+            return jsonify({"status": "error", "message": "Gain out of range (0-12 dB)"}), 400
+        with _config_lock:
+            cfg = _load_config()
+            cfg["audio_gain_db"] = gain
+            _save_config(cfg)
+        return jsonify({"status": "success", "gain": gain})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 @bp.route("/connect_bt_device", methods=["POST"])
 def connect_bt_device():
     # 1) get MAC from form or from config

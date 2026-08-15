@@ -98,6 +98,22 @@
       </div>
 
       <div class="row" style="margin-top:12px; gap:10px; align-items:center">
+        <label class="label">Volume Boost</label>
+        <input id="gain-slider" type="range" min="0" max="12" step="1"
+               value="{{ cfg.get('audio_gain_db', 0) }}"
+               oninput="document.getElementById('gain-val').textContent=this.value"
+               style="width:240px">
+        <span><strong id="gain-val">{{ cfg.get('audio_gain_db', 0) }}</strong> dB</span>
+        <button class="btn small" type="button" onclick="saveGain()">Save</button>
+        <span class="muted" id="gain-hint"></span>
+      </div>
+      <p class="muted" style="margin-top:4px">
+        Use this if your speaker still sounds quiet with volume already at 100% - it's a digital boost with
+        built-in limiting to avoid distortion, separate from the volume slider above. Start low (3-6 dB); higher
+        settings can start to sound compressed.
+      </p>
+
+      <div class="row" style="margin-top:12px; gap:10px; align-items:center">
         <input class="input" type="text" name="bluetooth_mac" id="bt-default-mac"
                placeholder="AA:BB:CC:DD:EE:FF"
                value="{{ cfg.get('bluetooth_mac', '') }}">
@@ -248,6 +264,26 @@
       const j = await r.json();
       hint.textContent = (j.status === 'success')
         ? 'Volume set to ' + j.volume + '%'
+        : 'Failed: ' + (j.message || 'unknown');
+    } catch (e) {
+      hint.textContent = 'Failed: ' + e;
+    }
+  }
+
+  async function saveGain() {
+    const el = document.getElementById('gain-slider');
+    const hint = document.getElementById('gain-hint');
+    const g = parseInt(el.value, 10);
+    try {
+      const body = new URLSearchParams({ gain: String(g) }).toString();
+      const r = await fetch('{{ url_for("azan.set_gain_ajax") }}', {
+        method: 'POST',
+        headers: {'Content-Type':'application/x-www-form-urlencoded'},
+        body
+      });
+      const j = await r.json();
+      hint.textContent = (j.status === 'success')
+        ? 'Boost set to ' + j.gain + ' dB'
         : 'Failed: ' + (j.message || 'unknown');
     } catch (e) {
       hint.textContent = 'Failed: ' + e;
