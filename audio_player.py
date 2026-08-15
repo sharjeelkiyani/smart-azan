@@ -225,20 +225,30 @@ def _play_native(path, backend, target, timeout):
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
-def _play_via_decode_to_tempfile(path, backend, target, timeout):
-    """For formats paplay/aplay can't read natively (mp3/m4a/aac): decode
-    fully to a temp WAV first, then play that like any native file."""
+def _play_via_decode_to_tempfile(path, backend, target, timeout, gain_db=0):
+    """For formats paplay/aplay can't read natively (mp3/m4a/aac), or
+    whenever a gain boost is requested: decode fully to a temp WAV first
+    (applying the gain filter if any), then play that like any native file.
+
+    Gain is paired with a brick-wall limiter (alimiter) rather than being a
+    bare volume multiply - several azan recordings already peak close to
+    0 dBFS, so any positive gain without limiting would just clip and
+    distort instead of actually sounding louder.
+    """
     import tempfile
     lower = path.lower()
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tf:
         tmp_path = tf.name
     try:
-        if lower.endswith((".mp3",)) and _which("mpg123"):
+        if lower.endswith((".mp3",)) and _which("mpg123") and not gain_db:
             subprocess.run(["mpg123", "-q", "-w", tmp_path, path],
                            timeout=timeout, check=True,
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         elif _which("ffmpeg"):
-            subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", path, tmp_path],
+            filter_args = []
+            if gain_db:
+                filter_args = ["-af", f"volume={gain_db}dB,alimiter=limit=0.95:level=false"]
+            subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", path] + filter_args + [tmp_path],
                            timeout=timeout, check=True,
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         else:
@@ -256,13 +266,13 @@ def _play_via_decode_to_tempfile(path, backend, target, timeout):
             pass
 
 
-def _play_once(path, backend, target, timeout):
+def _play_once(path, backend, target, timeout, gain_db=0):
     lower = path.lower()
-    if lower.endswith(_NATIVE_EXTS) and (backend == "pulse" and _which("paplay")
-                                          or backend == "alsa" and _which("aplay")):
+    if gain_db == 0 and lower.endswith(_NATIVE_EXTS) and (backend == "pulse" and _which("paplay")
+                                                            or backend == "alsa" and _which("aplay")):
         _play_native(path, backend, target, timeout)
     else:
-        _play_via_decode_to_tempfile(path, backend, target, timeout)
+        _play_via_decode_to_tempfile(path, backend, target, timeout, gain_db)
 
 
 # ---------------------------------------------------------------------
@@ -309,6 +319,11 @@ def play_via_snapcast(path, cfg, timeout=PLAY_TIMEOUT):
         print("[Snapcast] ffmpeg not available, cannot decode for snapcast")
         return False
 
+    try:
+        gain_db = float(cfg.get("audio_gain_db", 0) or 0)
+    except (TypeError, ValueError):
+        gain_db = 0
+
     jsonrpc_url = cfg.get("snapcast_jsonrpc")
     duck_to = cfg.get("snapcast_duck_to", 35)
     restore_to = cfg.get("snapcast_restore_to", 80)
@@ -317,7 +332,8 @@ def play_via_snapcast(path, cfg, timeout=PLAY_TIMEOUT):
 
     decode = None
     try:
-        decode_cmd = ["ffmpeg", "-v", "error", "-i", path, "-f", "s16le",
+        filter_args = ["-af", f"volume={gain_db}dB,alimiter=limit=0.95:level=false"] if gain_db else []
+        decode_cmd = ["ffmpeg", "-v", "error", "-i", path] + filter_args + ["-f", "s16le",
                       "-ar", str(SNAPCAST_SAMPLE_RATE), "-ac", "2", "-"]
         decode = subprocess.Popen(decode_cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
         # Plain open(path, "wb") implies O_CREAT|O_TRUNC, which the kernel
@@ -360,6 +376,11 @@ def play(path, cfg, timeout=PLAY_TIMEOUT, attempts=PLAY_ATTEMPTS):
         print(f"[Audio] missing file: {path}")
         return False
 
+    try:
+        gain_db = float(cfg.get("audio_gain_db", 0) or 0)
+    except (TypeError, ValueError):
+        gain_db = 0
+
     if cfg.get("snapcast_enabled"):
         if play_via_snapcast(path, cfg, timeout):
             print(f"[Audio] played '{path}' via snapcast")
@@ -374,7 +395,7 @@ def play(path, cfg, timeout=PLAY_TIMEOUT, attempts=PLAY_ATTEMPTS):
     last_err = None
     for attempt in range(1, attempts + 1):
         try:
-            _play_once(path, backend, target, timeout)
+            _play_once(path, backend, target, timeout, gain_db)
             print(f"[Audio] played '{path}' via {backend} -> {target}"
                   + (f" (attempt {attempt})" if attempt > 1 else ""))
             return True

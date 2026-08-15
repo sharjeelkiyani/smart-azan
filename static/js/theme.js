@@ -30,9 +30,9 @@
         el = document.createElement('style'); el.id = 'dark-vars';
         el.textContent = `
         :root[data-theme="dark"]{
-          --bg:#07130f; --card:#0f231b; --text:#eef7f1; --muted:#9db8a9;
-          --primary:#2fbf82; --primary-dark:#0b6e4f; --gold:#e0bf5a;
-          --success:#34d399; --danger:#f87171; --border:#1c3a2c;
+          --bg:#0a0e1a; --card:#131a2e; --text:#eef2f8; --muted:#8b96b3;
+          --primary:#22c55e; --primary-dark:#15803d; --gold:#e0bf5a;
+          --success:#34d399; --danger:#f87171; --border:#232b45;
           --shadow:0 6px 20px rgba(0,0,0,.5);
         }`;
         document.head.appendChild(el);

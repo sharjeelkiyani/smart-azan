@@ -62,6 +62,7 @@ def load_config():
             "bluetooth_sink": None,
             "speaker_name": "Main Speaker",
             "volume": 70,
+            "audio_gain_db": 0,
             "hotspot_ssid": "SmartAzanPi",
             "hotspot_password": "changeme123",
             "hotspot_enabled": False,
@@ -97,6 +98,7 @@ def load_config():
     cfg.setdefault("alsa_device", "")
     cfg.setdefault("speaker_name", "Main Speaker")
     cfg.setdefault("volume", 70)
+    cfg.setdefault("audio_gain_db", 0)
     cfg.setdefault("port", 5050)
     cfg.setdefault("wifi_networks", {})
     cfg.setdefault("wifi_autoconnect", True)
