@@ -15,6 +15,7 @@ import wifi
 import bluetooth
 import audio_player
 import history_log
+import quran_player
 
 bp = Blueprint("azan", __name__)
 
@@ -174,12 +175,15 @@ def azan_page():
         except Exception as e:
             print(f"[Azan] timetable read error: {e}")
 
+    live_tracks = [t for t in quran_player.list_tracks() if t.get("type") == "live"]
+
     return render_template(
         "azan.html",
         cfg=current_cfg,
         timetable_today=timetable_today,
         current_date=today,
-        now=datetime.now()
+        now=datetime.now(),
+        live_tracks=live_tracks,
     )
 
 
@@ -475,6 +479,21 @@ def settings():
                 fd = cfg.get("friday_dua") or {}
                 fd["khutbah_time"] = (request.form.get("khutbah_time") or "").strip()
                 fd["time"] = (request.form.get("friday_dua_time") or fd.get("time") or "").strip()
+                cfg["friday_dua"] = fd
+
+            elif form_id == "khutbah_relay":
+                fd = cfg.get("friday_dua") or {}
+                mode = request.form.get("khutbah_mode")
+                if mode in ("file", "live_relay"):
+                    fd["khutbah_mode"] = mode
+                t = (request.form.get("khutbah_time") or "").strip()
+                if t:
+                    fd["khutbah_time"] = t
+                fd["khutbah_relay_track_id"] = (request.form.get("khutbah_relay_track_id") or "").strip()
+                try:
+                    fd["khutbah_relay_minutes"] = max(1, int(request.form.get("khutbah_relay_minutes", 45)))
+                except (TypeError, ValueError):
+                    fd["khutbah_relay_minutes"] = 45
                 cfg["friday_dua"] = fd
 
             elif form_id == "wifi":  # <-- add this form in settings.html

@@ -246,15 +246,38 @@
   <section class="card">
     <h2>Friday Khutbah</h2>
     <p class="muted">
-      Current: <strong>{{ fd.get('khutbah_file') or '-' }}</strong>
-      at <strong>{{ fd.get('khutbah_time') or '-' }}</strong>
+      Mode: <strong>{{ 'Live relay' if fd.get('khutbah_mode') == 'live_relay' else 'Uploaded file' }}</strong> ·
+      Time: <strong>{{ fd.get('khutbah_time') or '-' }}</strong>
+      {% if fd.get('khutbah_mode') == 'live_relay' %}
+        · Track: <strong>{{ fd.get('khutbah_relay_track_id') or '-' }}</strong>
+        · Duration: <strong>{{ fd.get('khutbah_relay_minutes', 45) }} min</strong>
+      {% else %}
+        · File: <strong>{{ fd.get('khutbah_file') or '-' }}</strong>
+      {% endif %}
     </p>
-    <p class="muted">Uploads and plays automatically at the set time every Friday.</p>
 
-    <form method="post" action="{{ url_for('azan.upload_khutbah_audio') }}" enctype="multipart/form-data" class="grid2 gap">
+    <div class="row" style="gap:16px;margin-bottom:10px">
+      <label class="row" style="gap:6px">
+        <input type="radio" name="khutbah_mode_display" value="file"
+               onchange="toggleKhutbahMode('file')"
+               {{ 'checked' if fd.get('khutbah_mode', 'file') == 'file' }}>
+        Upload an audio file
+      </label>
+      <label class="row" style="gap:6px">
+        <input type="radio" name="khutbah_mode_display" value="live_relay"
+               onchange="toggleKhutbahMode('live_relay')"
+               {{ 'checked' if fd.get('khutbah_mode') == 'live_relay' }}>
+        Relay a live stream (e.g. Makkah) automatically
+      </label>
+    </div>
+
+    <!-- File mode -->
+    <form id="khutbah-file-form" method="post" action="{{ url_for('azan.upload_khutbah_audio') }}"
+          enctype="multipart/form-data" class="grid2 gap"
+          {{ 'style=display:none' if fd.get('khutbah_mode') == 'live_relay' else '' }}>
       <label>
         <div class="muted">Khutbah start time (24h)</div>
-        <input type="time" name="khutbah_time" required>
+        <input type="time" name="khutbah_time" value="{{ fd.get('khutbah_time', '') }}" required>
       </label>
       <label>
         <div class="muted">Audio File</div>
@@ -263,6 +286,39 @@
       <div class="row">
         <button class="btn" type="submit">Upload Khutbah</button>
       </div>
+    </form>
+
+    <!-- Live relay mode -->
+    <form id="khutbah-relay-form" method="post" action="{{ url_for('azan.settings') }}" class="grid2 gap"
+          {{ '' if fd.get('khutbah_mode') == 'live_relay' else 'style=display:none' }}>
+      <input type="hidden" name="form_id" value="khutbah_relay">
+      <input type="hidden" name="khutbah_mode" value="live_relay">
+      <label>
+        <div class="muted">Khutbah start time (24h)</div>
+        <input type="time" name="khutbah_time" value="{{ fd.get('khutbah_time', '') }}" required>
+      </label>
+      <label>
+        <div class="muted">Live stream to relay</div>
+        <select name="khutbah_relay_track_id" required>
+          <option value="">Choose a live stream…</option>
+          {% for t in live_tracks %}
+            <option value="{{ t.id }}" {{ 'selected' if fd.get('khutbah_relay_track_id') == t.id }}>{{ t.title }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>
+        <div class="muted">Relay duration (minutes)</div>
+        <input type="number" name="khutbah_relay_minutes" min="1" max="120"
+               value="{{ fd.get('khutbah_relay_minutes', 45) }}">
+      </label>
+      <div class="row">
+        <button class="btn" type="submit">Save Live Relay Settings</button>
+      </div>
+      {% if not live_tracks %}
+        <p class="muted" style="grid-column:1 / -1">
+          No live streams added yet - add one on the <a href="{{ url_for('quran.quran_page') }}">Quran &amp; Live</a> page first.
+        </p>
+      {% endif %}
     </form>
   </section>
 
@@ -287,6 +343,11 @@
   function toggleEdit(idx){
     const row = document.getElementById('edit-row-' + idx);
     if(row){ row.style.display = (row.style.display === 'none' || row.style.display === '') ? 'table-row' : 'none'; }
+  }
+
+  function toggleKhutbahMode(mode) {
+    document.getElementById('khutbah-file-form').style.display = (mode === 'file') ? '' : 'none';
+    document.getElementById('khutbah-relay-form').style.display = (mode === 'live_relay') ? '' : 'none';
   }
 </script>
 {% endblock %}

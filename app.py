@@ -18,6 +18,7 @@ import routes_dashboard
 import audio_player
 import history_log
 import islamic_utils
+import quran_player
 
 # ----------------- constants -----------------
 AUDIO_FOLDER = "audio"
@@ -49,7 +50,10 @@ def load_config():
                 "Isha": "default_azan.mp3",
             },
             "duas": [],
-            "friday_dua": {"file": "", "time": "", "khutbah_time": "", "khutbah_file": ""},
+            "friday_dua": {
+                "file": "", "time": "", "khutbah_time": "", "khutbah_file": "",
+                "khutbah_mode": "file", "khutbah_relay_track_id": "", "khutbah_relay_minutes": 45,
+            },
             "iqama_audio": "iqama.mp3",
             "output_device": "auto",
             "audio_output_mode": "auto",
@@ -85,6 +89,9 @@ def load_config():
     cfg.setdefault("friday_dua", {"file": "", "time": ""})
     cfg["friday_dua"].setdefault("khutbah_time", "")
     cfg["friday_dua"].setdefault("khutbah_file", "")
+    cfg["friday_dua"].setdefault("khutbah_mode", "file")
+    cfg["friday_dua"].setdefault("khutbah_relay_track_id", "")
+    cfg["friday_dua"].setdefault("khutbah_relay_minutes", 45)
     cfg.setdefault("output_device", "auto")
     cfg.setdefault("audio_output_mode", cfg.get("output_device", "auto"))
     cfg.setdefault("alsa_device", "")
@@ -256,13 +263,22 @@ def play_audio(filename, event_type="manual", label=None):
     return ok
 
 
+_khutbah_relay_stop_at = None
+
+
 # ----------------- scheduler thread -----------------
 def scheduler():
+    global _khutbah_relay_stop_at
     print("[Scheduler] Running…")
     played_events = set()
     last_min = -1
     while True:
         now = datetime.now()
+
+        if _khutbah_relay_stop_at and now >= _khutbah_relay_stop_at:
+            print("[Scheduler] Stopping Friday khutbah live relay (duration elapsed)")
+            quran_player.stop(audio_folder=AUDIO_FOLDER)
+            _khutbah_relay_stop_at = None
         if now.minute != last_min:
             played_events.clear()
             last_min = now.minute
@@ -359,14 +375,34 @@ def scheduler():
                     play_audio(ffile, "friday_dua", "Friday dua")
                     played_events.add(eid)
 
-            kfile = (friday_dua.get("khutbah_file") or "").strip()
             ktime = (friday_dua.get("khutbah_time") or "").strip()
-            if kfile and ktime == now.strftime("%H:%M"):
-                keid = f"khutbah_{current_minute_str}"
-                if keid not in played_events:
-                    print(f"[Scheduler] Playing Friday khutbah {kfile}")
-                    play_audio(kfile, "khutbah", "Friday khutbah")
-                    played_events.add(keid)
+            kmode = (friday_dua.get("khutbah_mode") or "file").strip()
+
+            if kmode == "live_relay":
+                track_id = (friday_dua.get("khutbah_relay_track_id") or "").strip()
+                if track_id and ktime == now.strftime("%H:%M"):
+                    keid = f"khutbah_relay_{current_minute_str}"
+                    if keid not in played_events:
+                        try:
+                            relay_minutes = int(friday_dua.get("khutbah_relay_minutes") or 45)
+                        except (TypeError, ValueError):
+                            relay_minutes = 45
+                        print(f"[Scheduler] Starting Friday khutbah live relay (track {track_id}, {relay_minutes} min)")
+                        ok, err = quran_player.play_track(current_cfg, track_id, audio_folder=AUDIO_FOLDER)
+                        history_log.log_event("khutbah", "Friday khutbah (live relay)", track_id, ok)
+                        if ok:
+                            _khutbah_relay_stop_at = now + timedelta(minutes=relay_minutes)
+                        else:
+                            print(f"[Scheduler] khutbah live relay failed to start: {err}")
+                        played_events.add(keid)
+            else:
+                kfile = (friday_dua.get("khutbah_file") or "").strip()
+                if kfile and ktime == now.strftime("%H:%M"):
+                    keid = f"khutbah_{current_minute_str}"
+                    if keid not in played_events:
+                        print(f"[Scheduler] Playing Friday khutbah {kfile}")
+                        play_audio(kfile, "khutbah", "Friday khutbah")
+                        played_events.add(keid)
 
         time.sleep(10)
 
