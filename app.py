@@ -443,4 +443,15 @@ if __name__ == "__main__":
     with config_lock:
         port = int(load_config().get("port", 5050))
 
-    app.run(host="0.0.0.0", port=port)
+    # Serve over HTTPS if a cert/key pair is present (see gen_https_cert.sh) -
+    # browsers only allow the Geolocation API on a secure origin (https:// or
+    # localhost), which a plain http://<lan-ip> address never qualifies as,
+    # so GPS-based location silently fails without this. Falls back to plain
+    # HTTP if no cert exists, so this stays optional for other installs.
+    cert_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cert.pem")
+    key_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cert.key")
+    if os.path.exists(cert_path) and os.path.exists(key_path):
+        print(f"[Server] HTTPS enabled (cert: {cert_path})")
+        app.run(host="0.0.0.0", port=port, ssl_context=(cert_path, key_path))
+    else:
+        app.run(host="0.0.0.0", port=port)

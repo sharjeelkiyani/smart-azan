@@ -46,6 +46,11 @@ if [ -z "$(ls -A audio 2>/dev/null)" ]; then
   echo "==> audio/ is empty - upload your azan/dua recordings from the web UI (Settings) after starting the service."
 fi
 
+if [ ! -f cert.pem ] || [ ! -f cert.key ]; then
+  echo "==> Generating a self-signed HTTPS certificate (needed for GPS location to work in the browser)..."
+  ./gen_https_cert.sh
+fi
+
 echo "==> Installing systemd service..."
 sed "s/__USER__/$(whoami)/" smart-azan.service | sudo tee /etc/systemd/system/smart-azan.service > /dev/null
 sudo systemctl daemon-reload
@@ -56,7 +61,9 @@ echo
 echo "==> Done. Smart Azan should now be running on boot."
 echo "    Check status:   sudo systemctl status smart-azan"
 echo "    View logs:       sudo journalctl -u smart-azan -f"
-echo "    Web UI:          http://$(hostname -I | awk '{print $1}'):5050"
+echo "    Web UI:          https://$(hostname -I | awk '{print $1}'):5050"
+echo "                     (self-signed cert - your browser will warn once, click through it;"
+echo "                     needed for GPS location to work)"
 echo
 echo "Next: open the web UI -> Settings -> Audio Output, pick/test your speaker"
 echo "(Bluetooth, HDMI, USB DAC, or 3.5mm jack), then upload your azan audio files."

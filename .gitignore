@@ -10,6 +10,11 @@ audio/*
 timetable.csv
 quran_state.json
 history.jsonl
+
+# Self-signed HTTPS cert - host-specific (covers this machine's LAN IPs),
+# regenerate per install with gen_https_cert.sh
+cert.pem
+cert.key
 __pycache__/
 *.pyc
 venv/
