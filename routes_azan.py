@@ -286,6 +286,18 @@ def upload_csv():
     return redirect(url_for("azan.azan_page"))
 
 
+@bp.route("/import_timetable/aisha_masjid", methods=["POST"])
+def import_timetable_aisha_masjid():
+    import mosque_import
+    try:
+        rows = mosque_import.fetch_aisha_masjid_timetable()
+        imported, total = mosque_import.merge_into_timetable(rows, _TIMETABLE_FILE)
+        flash(f"Imported {imported} day(s) from Aisha Masjid ({total} total days in timetable).", "success")
+    except Exception as e:
+        flash(f"Import failed: {e}. Your existing timetable was not changed.", "danger")
+    return redirect(url_for("azan.azan_page"))
+
+
 @bp.route("/upload_azan_per_prayer", methods=["POST"])
 def upload_azan_per_prayer():
     f = request.files.get("file")

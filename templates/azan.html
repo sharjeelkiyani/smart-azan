@@ -47,6 +47,14 @@
       <input type="file" name="file" accept=".csv" required>
       <button class="btn" type="submit">Upload CSV</button>
     </form>
+
+    <p class="muted" style="margin-top:14px">
+      Or import directly from your mosque's published timetable (adds/updates the days it covers,
+      keeps everything else in your timetable untouched):
+    </p>
+    <form method="post" action="{{ url_for('azan.import_timetable_aisha_masjid') }}" class="row">
+      <button class="btn secondary" type="submit">🕌 Import from Aisha Masjid (aishamasjid.org.uk)</button>
+    </form>
   </section>
 
   <!-- Per-prayer azan files -->
