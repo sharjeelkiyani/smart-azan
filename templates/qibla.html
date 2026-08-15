@@ -73,7 +73,11 @@
     position: absolute; top: 0; left: 0;
     width: 220px; height: 220px;
     transform-origin: 50% 50%;
-    transition: transform 0.3s ease;
+    /* No CSS transition here - the per-frame smoothing in the script
+       already eases the motion. Stacking a CSS transition on top made
+       every animation-frame update restart/interrupt the previous
+       transition, which is what looked like vibrating instead of
+       smoothly moving. */
     pointer-events: none;
   }
   .needle-kaaba {
@@ -153,6 +157,7 @@
 
   window.addEventListener('beforeunload', () => {
     if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+    if (compassRafId !== null) cancelAnimationFrame(compassRafId);
   });
 
   async function saveLocation() {
@@ -179,6 +184,8 @@
   // the needle only ever moves the direction you actually turned.
   let smoothedHeading = null;
   let needleAngle = 0;
+  let latestRawHeading = null;
+  let compassRafId = null;
 
   function mod360(x) { return ((x % 360) + 360) % 360; }
   function shortestDelta(from, to) {
@@ -191,6 +198,12 @@
     const hint = document.getElementById('compass-hint');
     if (!hasBearing) { hint.textContent = 'Get a Qibla bearing first (GPS or saved location).'; return; }
 
+    // Sensor events just record the latest raw reading - they fire far
+    // faster than the eye can follow and every event used to trigger its
+    // own CSS transition, so a rapid stream of tiny, noisy readings each
+    // restarted/interrupted the previous transition and looked like the
+    // arrow was vibrating in place rather than moving. The needle itself
+    // is now only ever redrawn once per animation frame, in tick() below.
     function handle(e) {
       // Plain (non-absolute) deviceorientation on Android is relative to
       // wherever the device happened to be pointing when it started, not
@@ -199,20 +212,31 @@
       if (e.webkitCompassHeading == null && e.absolute !== true) return;
       compassDataReceived = true;
       if (compassNoDataTimer) { clearTimeout(compassNoDataTimer); compassNoDataTimer = null; }
+      latestRawHeading = e.webkitCompassHeading != null ? e.webkitCompassHeading : (360 - e.alpha);
+    }
 
-      const rawHeading = e.webkitCompassHeading != null ? e.webkitCompassHeading : (360 - e.alpha);
+    function tick() {
+      if (latestRawHeading != null) {
+        // Circular low-pass filter - a small alpha means the displayed
+        // heading eases smoothly toward the raw reading instead of
+        // jumping straight to every noisy sample.
+        smoothedHeading = smoothedHeading == null
+          ? latestRawHeading
+          : smoothedHeading + shortestDelta(smoothedHeading, latestRawHeading) * 0.08;
 
-      // Light smoothing to kill small jitter, done circularly (can't just
-      // average raw degrees across the 0/360 wrap).
-      smoothedHeading = smoothedHeading == null
-        ? rawHeading
-        : smoothedHeading + shortestDelta(smoothedHeading, rawHeading) * 0.2;
+        const target = mod360(QIBLA_BEARING - smoothedHeading);
+        const delta = shortestDelta(mod360(needleAngle), target);
 
-      const target = mod360(QIBLA_BEARING - smoothedHeading);
-      needleAngle += shortestDelta(mod360(needleAngle), target);
-
-      document.getElementById('qibla-needle').style.transform = `rotate(${needleAngle}deg)`;
-      hint.textContent = 'Rotate your device so the Kaaba icon points up.';
+        // Ignore sub-noise movement entirely so the arrow holds
+        // perfectly still while the phone isn't actually turning,
+        // instead of trembling around the true heading.
+        if (Math.abs(delta) > 0.3) {
+          needleAngle += delta;
+          document.getElementById('qibla-needle').style.transform = `rotate(${needleAngle}deg)`;
+        }
+        hint.textContent = 'Rotate your device so the arrow points straight ahead of you.';
+      }
+      compassRafId = requestAnimationFrame(tick);
     }
 
     function armNoDataTimeout() {
@@ -225,6 +249,8 @@
         }
       }, 3000);
     }
+
+    if (compassRafId == null) compassRafId = requestAnimationFrame(tick);
 
     if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
       // iOS 13+ Safari: needs an explicit permission prompt, then gives a
