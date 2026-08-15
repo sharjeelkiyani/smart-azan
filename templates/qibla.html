@@ -139,22 +139,59 @@
     hint.textContent = j.ok ? 'Saved as your default location - weather and future visits will use this too.' : 'Failed to save.';
   }
 
+  let compassDataReceived = false;
+  let compassNoDataTimer = null;
+
   function enableDeviceCompass() {
     const hint = document.getElementById('compass-hint');
     if (!hasBearing) { hint.textContent = 'Get a Qibla bearing first (GPS or saved location).'; return; }
+
     function handle(e) {
-      let heading = e.webkitCompassHeading != null ? e.webkitCompassHeading : (360 - e.alpha);
+      // Plain (non-absolute) deviceorientation on Android is relative to
+      // wherever the device happened to be pointing when it started, not
+      // true north - only trust it if the event is flagged absolute, or
+      // we're on iOS where webkitCompassHeading is always a real heading.
+      if (e.webkitCompassHeading == null && e.absolute !== true) return;
+      compassDataReceived = true;
+      if (compassNoDataTimer) { clearTimeout(compassNoDataTimer); compassNoDataTimer = null; }
+
+      const heading = e.webkitCompassHeading != null ? e.webkitCompassHeading : (360 - e.alpha);
       const rel = (QIBLA_BEARING - heading + 360) % 360;
       document.getElementById('qibla-needle').style.transform = `rotate(${rel}deg)`;
       hint.textContent = 'Rotate your device so the Kaaba icon points up.';
     }
+
+    function armNoDataTimeout() {
+      compassDataReceived = false;
+      compassNoDataTimer = setTimeout(() => {
+        if (!compassDataReceived) {
+          hint.textContent = 'No compass data received - your browser/device may not expose a true '
+            + 'heading here (common on some Android/Chrome versions). The bearing above is still '
+            + 'accurate; you can align it manually using a separate compass app if this doesn\'t work.';
+        }
+      }, 3000);
+    }
+
     if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+      // iOS 13+ Safari: needs an explicit permission prompt, then gives a
+      // real compass heading via webkitCompassHeading on the plain event.
       DeviceOrientationEvent.requestPermission().then(state => {
-        if (state === 'granted') window.addEventListener('deviceorientation', handle);
-        else hint.textContent = 'Compass permission denied.';
+        if (state === 'granted') {
+          window.addEventListener('deviceorientation', handle);
+          armNoDataTimeout();
+        } else {
+          hint.textContent = 'Compass permission denied.';
+        }
       }).catch(() => { hint.textContent = 'Compass not available on this device.'; });
+    } else if ('ondeviceorientationabsolute' in window) {
+      // Most Android browsers: this event's alpha is genuinely absolute.
+      window.addEventListener('deviceorientationabsolute', handle);
+      armNoDataTimeout();
     } else if ('DeviceOrientationEvent' in window) {
-      window.addEventListener('deviceorientationabsolute', handle) || window.addEventListener('deviceorientation', handle);
+      // Fallback for browsers with no absolute variant - only usable if the
+      // event itself reports absolute:true (checked inside handle()).
+      window.addEventListener('deviceorientation', handle);
+      armNoDataTimeout();
     } else {
       hint.textContent = 'This device/browser does not support compass orientation.';
     }
