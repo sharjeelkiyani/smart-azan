@@ -41,7 +41,7 @@
   }
 
   function updateControls() {
-    document.querySelectorAll('#theme-modes-sidebar button').forEach(b => {
+    document.querySelectorAll('#theme-modes-sidebar button, #theme-modes-mobile button').forEach(b => {
       b.classList.toggle('active', b.dataset.mode === currentMode);
     });
     const btn = document.getElementById('theme-toggle');
@@ -71,7 +71,7 @@
       });
     }
 
-    document.querySelectorAll('#theme-modes-sidebar button').forEach(b => {
+    document.querySelectorAll('#theme-modes-sidebar button, #theme-modes-mobile button').forEach(b => {
       b.addEventListener('click', () => setMode(b.dataset.mode));
     });
 
