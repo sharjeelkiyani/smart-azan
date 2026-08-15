@@ -214,6 +214,10 @@ def integrations_page():
             cfg["snapcast_restore_to"] = int(request.form.get("snapcast_restore_to", 80))
         except (TypeError, ValueError):
             pass
+        try:
+            cfg["snapcast_restore_delay_s"] = max(0.0, float(request.form.get("snapcast_restore_delay_s", 2.5)))
+        except (TypeError, ValueError):
+            pass
         _save(cfg)
         flash("Integration settings saved.", "success")
         return redirect(url_for("dashboard.integrations_page"))

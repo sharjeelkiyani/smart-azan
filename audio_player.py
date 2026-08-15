@@ -358,7 +358,19 @@ def play_via_snapcast(path, cfg, timeout=PLAY_TIMEOUT):
         if decode is not None and decode.poll() is None:
             decode.kill()
         if jsonrpc_url:
-            time.sleep(1)  # let the last buffered chunk drain before restoring volume
+            # Snapcast buffers audio (server-side "bufferms" plus each
+            # client's own network/decode buffer - a cast-bridged speaker
+            # adds even more on top of that), so the last second or so of
+            # audio written into the FIFO hasn't actually been heard yet by
+            # the time ffmpeg finishes decoding. Restoring volume right away
+            # made the tail end of the dua audibly jump up mid-playback.
+            # A flat 1s guess wasn't enough headroom for that pipeline -
+            # tunable per-setup since buffer/network latency varies.
+            try:
+                restore_delay_s = float(cfg.get("snapcast_restore_delay_s", 2.5))
+            except (TypeError, ValueError):
+                restore_delay_s = 2.5
+            time.sleep(max(0.0, restore_delay_s))
             _snapcast_set_all_client_volumes(jsonrpc_url, restore_to)
 
 
