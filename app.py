@@ -338,11 +338,6 @@ def scheduler():
         time.sleep(10)
 
 
-@app.context_processor
-def _inject_globals():
-    return {"hijri_today": islamic_utils.hijri_date_string(datetime.now())}
-
-
 def _read_timetable_row(date_str):
     if not os.path.exists(TIMETABLE_FILE):
         return None
@@ -354,6 +349,46 @@ def _read_timetable_row(date_str):
     except Exception as e:
         print("[Index] timetable read error:", e)
     return None
+
+
+def _night_window(now):
+    """(maghrib_dt, next_fajr_dt) bracketing 'night' for the auto day/night
+    theme - Maghrib (sunset) through the next Fajr (dawn), the same boundary
+    Islamically used for the night. Returns (None, None) if today's/
+    tomorrow's timetable rows aren't available."""
+    today_row = _read_timetable_row(now.strftime("%d/%m/%Y"))
+    maghrib_dt = None
+    if today_row:
+        t = (today_row.get("Maghrib") or "").strip()
+        if t:
+            try:
+                maghrib_dt = datetime.strptime(f"{now.strftime('%Y/%m/%d')} {t}", "%Y/%m/%d %H:%M")
+            except ValueError:
+                pass
+
+    fajr_day = now if now.strftime("%H:%M") < "12:00" else now + timedelta(days=1)
+    fajr_row = _read_timetable_row(fajr_day.strftime("%d/%m/%Y"))
+    fajr_dt = None
+    if fajr_row:
+        t = (fajr_row.get("Fajr") or "").strip()
+        if t:
+            try:
+                fajr_dt = datetime.strptime(f"{fajr_day.strftime('%Y/%m/%d')} {t}", "%Y/%m/%d %H:%M")
+            except ValueError:
+                pass
+
+    return maghrib_dt, fajr_dt
+
+
+@app.context_processor
+def _inject_globals():
+    now = datetime.now()
+    maghrib_dt, fajr_dt = _night_window(now)
+    return {
+        "hijri_today": islamic_utils.hijri_date_string(now),
+        "night_maghrib_iso": maghrib_dt.isoformat() if maghrib_dt else None,
+        "night_fajr_iso": fajr_dt.isoformat() if fajr_dt else None,
+    }
 
 
 PRAYER_NAMES = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]

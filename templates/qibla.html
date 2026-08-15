@@ -26,13 +26,14 @@
     <p class="muted">from true north, measured clockwise</p>
 
     <div class="row" style="justify-content:center;gap:8px;flex-wrap:wrap;margin-top:10px">
-      <button class="btn primary" type="button" onclick="useGpsLocation()">📍 Use My GPS Location</button>
+      <button class="btn primary" type="button" id="btn-live-gps" onclick="toggleLiveGps()">📍 Track Live Location</button>
       <button class="btn secondary" type="button" id="btn-save-location" style="display:none" onclick="saveLocation()">
         💾 Save as my default location
       </button>
       <button class="btn ghost" type="button" onclick="enableDeviceCompass()">📱 Use Device Compass</button>
     </div>
     <p class="muted" id="compass-hint" style="margin-top:10px"></p>
+    <p class="muted" id="live-gps-status" style="margin-top:4px"></p>
   </section>
 {% endblock %}
 
@@ -82,25 +83,50 @@
     document.getElementById('qibla-bearing-text').textContent = bearing.toFixed(1) + '°';
   }
 
-  function useGpsLocation() {
+  let watchId = null;
+
+  function toggleLiveGps() {
+    const btn = document.getElementById('btn-live-gps');
+    const status = document.getElementById('live-gps-status');
     const hint = document.getElementById('compass-hint');
+
+    if (watchId !== null) {
+      navigator.geolocation.clearWatch(watchId);
+      watchId = null;
+      btn.textContent = '📍 Track Live Location';
+      status.textContent = 'Live tracking stopped.';
+      return;
+    }
+
     if (!('geolocation' in navigator)) { hint.textContent = 'Geolocation is not supported on this device.'; return; }
     hint.textContent = 'Getting your location…';
-    navigator.geolocation.getCurrentPosition(
+    btn.textContent = '⏹ Stop Live Tracking';
+    status.textContent = 'Tracking live - the bearing updates automatically as you move.';
+
+    watchId = navigator.geolocation.watchPosition(
       (pos) => {
         pendingLat = pos.coords.latitude;
         pendingLon = pos.coords.longitude;
         const bearing = computeQiblaBearing(pendingLat, pendingLon);
         renderBearing(bearing);
         document.getElementById('qibla-source').textContent =
-          `Direction to the Kaaba from your current GPS location (${pendingLat.toFixed(4)}, ${pendingLon.toFixed(4)}, ±${Math.round(pos.coords.accuracy)}m).`;
+          `Direction to the Kaaba from your live GPS location (${pendingLat.toFixed(4)}, ${pendingLon.toFixed(4)}, ±${Math.round(pos.coords.accuracy)}m).`;
         document.getElementById('btn-save-location').style.display = 'inline-block';
         hint.textContent = '';
       },
-      (err) => { hint.textContent = 'Could not get GPS location: ' + err.message; },
-      { enableHighAccuracy: true, timeout: 10000 }
+      (err) => {
+        hint.textContent = 'Could not get GPS location: ' + err.message;
+        status.textContent = '';
+        btn.textContent = '📍 Track Live Location';
+        watchId = null;
+      },
+      { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 }
     );
   }
+
+  window.addEventListener('beforeunload', () => {
+    if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+  });
 
   async function saveLocation() {
     const hint = document.getElementById('compass-hint');

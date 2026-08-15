@@ -48,10 +48,11 @@
         <div class="sidebar-clock" id="sidebar-clock">--:--</div>
         <div class="sidebar-date" id="sidebar-date"></div>
         <div class="sidebar-hijri">{{ hijri_today }}</div>
-        <label class="night-mode-row">
-          <span>🌙 Night Mode</span>
-          <input type="checkbox" id="theme-toggle-sidebar">
-        </label>
+        <div class="theme-modes" id="theme-modes-sidebar">
+          <button type="button" data-mode="light">☀️</button>
+          <button type="button" data-mode="dark">🌙</button>
+          <button type="button" data-mode="auto">🌓 Auto</button>
+        </div>
       </div>
     </aside>
 
@@ -107,6 +108,13 @@
       tick();
       setInterval(tick, 1000 * 30);
     })();
+  </script>
+  <script>
+    // Today's Maghrib -> next Fajr window, for the auto day/night theme.
+    window.SMART_AZAN_NIGHT = {
+      maghribIso: {{ night_maghrib_iso|tojson }},
+      fajrIso: {{ night_fajr_iso|tojson }},
+    };
   </script>
   <script src="/static/js/mobile.js"></script>
   <script src="/static/js/theme.js"></script>
