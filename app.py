@@ -450,8 +450,12 @@ if __name__ == "__main__":
     # HTTP if no cert exists, so this stays optional for other installs.
     cert_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cert.pem")
     key_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cert.key")
+    # threaded=True: without it, Werkzeug's dev server handles one request at
+    # a time - a single slow/stuck connection (or a manual azan/Quran play,
+    # which blocks the request for the full clip duration) freezes the whole
+    # web UI for everyone else until it finishes.
     if os.path.exists(cert_path) and os.path.exists(key_path):
         print(f"[Server] HTTPS enabled (cert: {cert_path})")
-        app.run(host="0.0.0.0", port=port, ssl_context=(cert_path, key_path))
+        app.run(host="0.0.0.0", port=port, ssl_context=(cert_path, key_path), threaded=True)
     else:
-        app.run(host="0.0.0.0", port=port)
+        app.run(host="0.0.0.0", port=port, threaded=True)
