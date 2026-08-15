@@ -526,6 +526,7 @@ def settings():
     alsa_devices = [o for o in audio_outputs["outputs"] if o["backend"] == "alsa"]
     scanned_networks = _wifi_get_scanned_networks()
     is_scanning = _wifi_is_scanning()
+    hotspot_status = wifi.get_hotspot_status()
 
     return render_template(
         "settings.html",
@@ -535,6 +536,7 @@ def settings():
         audio_outputs=audio_outputs,
         scanned_networks=scanned_networks,
         is_scanning=is_scanning,
+        hotspot_status=hotspot_status,
     )
 
 @bp.route("/set_volume", methods=["POST"])

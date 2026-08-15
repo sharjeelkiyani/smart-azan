@@ -177,9 +177,102 @@
     </div>
   </section>
 
-  <p class="muted" style="margin-top:4px">
-    Wi-Fi networks and hotspot settings moved to the <a href="{{ url_for('wifi.wifi_page') }}">Wi-Fi</a> page.
-  </p>
+  <!-- Hotspot -->
+  <section class="card">
+    <h2>Hotspot</h2>
+    <div class="row">
+      <div id="hotspot-card-status" class="pill">
+        Hotspot: {{ 'ON (' ~ hotspot_status.ip ~ ')' if hotspot_status.active else 'OFF' }}
+      </div>
+    </div>
+
+    <form method="post" action="{{ url_for('wifi.save_hotspot_config') }}" class="grid2" style="margin-top:12px">
+      <div>
+        <label class="label">Hotspot name (SSID)</label>
+        <input class="input" type="text" name="hotspot_ssid" value="{{ cfg.get('hotspot_ssid', 'SmartAzanPi') }}" required>
+      </div>
+      <div>
+        <label class="label">Hotspot password (min. 8 characters)</label>
+        <input class="input" type="password" name="hotspot_password" placeholder="Leave blank to keep current password">
+      </div>
+      <div style="grid-column:1 / -1">
+        <button class="btn primary" type="submit">Save Hotspot Settings</button>
+      </div>
+    </form>
+
+    <div class="grid2" style="margin-top:14px">
+      <form method="post" action="{{ url_for('wifi.start_hotspot_route') }}">
+        <button class="btn">📡 Start</button>
+      </form>
+      <form method="post" action="{{ url_for('wifi.stop_hotspot_route') }}">
+        <button class="btn">🛑 Stop</button>
+      </form>
+    </div>
+
+    <form id="auto-hotspot-form" class="row" method="post" action="{{ url_for('wifi.toggle_auto_hotspot') }}" style="margin-top:10px">
+      <input type="hidden" name="enable_auto_hotspot" id="enable_auto_hotspot" value="{{ 'true' if cfg.get('auto_hotspot_enabled') else 'false' }}">
+      <label>
+        <input type="checkbox" id="auto_hotspot_chk" {% if cfg.get('auto_hotspot_enabled') %}checked{% endif %}>
+        Enable automatic hotspot when internet is down
+      </label>
+      <button class="btn">Save</button>
+    </form>
+  </section>
+
+  <!-- Preferred Wi-Fi -->
+  <section class="card">
+    <h2>Preferred Wi-Fi</h2>
+    <form method="post" action="{{ url_for('azan.settings') }}" class="grid2">
+      <input type="hidden" name="form_id" value="wifi">
+      <div>
+        <label class="label">Preferred Wi-Fi SSID</label>
+        <input class="input" name="preferred_wifi_ssid"
+               value="{{ cfg.get('preferred_wifi_ssid', '') }}"
+               placeholder="MyHomeWiFi">
+      </div>
+      <div>
+        <label class="label">Password (optional)</label>
+        <input class="input" type="password" name="preferred_wifi_password" placeholder="••••••••">
+      </div>
+      <label style="grid-column:1 / -1; margin-top:4px">
+        <input type="checkbox" name="wifi_autoconnect"
+               {% if cfg.get('wifi_autoconnect', True) %}checked{% endif %}>
+        Auto-connect when Wi-Fi is available
+      </label>
+      <div style="grid-column:1 / -1">
+        <button class="btn primary" type="submit">Save</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- Wi-Fi networks -->
+  <section class="card">
+    <h2>Wi‑Fi Networks</h2>
+    <div class="row">
+      <button id="btn-scan-wifi-settings" class="btn primary" type="button">🔎 Scan Wi‑Fi</button>
+      <span class="pill" id="wifi-scan-state">{{ 'SCANNING…' if is_scanning else 'Idle' }}</span>
+    </div>
+
+    <div id="wifi-network-list" class="list" style="margin-top:10px">
+      {% for n in scanned_networks %}
+        <div class="item">
+          <div class="row" style="justify-content:space-between">
+            <div>
+              <strong>{{ n.ssid }}</strong>
+              <div class="muted">{{ n.bssid }} · {{ n.signal }}% · {{ n.security }}</div>
+            </div>
+            <form method="post" action="{{ url_for('wifi.connect_wifi') }}" class="row">
+              <input class="input" type="hidden" name="ssid" value="{{ n.ssid }}">
+              <input class="input" type="password" name="password" placeholder="Password (if required)">
+              <button class="btn success">Connect</button>
+            </form>
+          </div>
+        </div>
+      {% else %}
+        <p class="muted">No networks yet. Tap "Scan Wi‑Fi".</p>
+      {% endfor %}
+    </div>
+  </section>
 
 {% endblock %}
 
@@ -452,6 +545,11 @@
         pillHot.textContent = 'Hotspot: ' + (hsActive ? ('ON' + (n.hotspot.ip ? ' ('+n.hotspot.ip+')' : '')) : 'OFF');
       }
 
+      const hotspotCardStatus = document.getElementById('hotspot-card-status');
+      if (hotspotCardStatus) {
+        hotspotCardStatus.textContent = 'Hotspot: ' + (hsActive ? ('ON ' + (n.hotspot.ip ? '('+n.hotspot.ip+')' : '')) : 'OFF');
+      }
+
       if (hint) {
         hint.style.display = (wifiState === 'disabled') ? '' : 'none';
       }
@@ -459,5 +557,70 @@
   }
   document.addEventListener('DOMContentLoaded', refreshNetSummary);
   setInterval(refreshNetSummary, 7000);
+
+  // ---------- Auto-hotspot checkbox ----------
+  (function() {
+    const chk = document.getElementById('auto_hotspot_chk');
+    const hidden = document.getElementById('enable_auto_hotspot');
+    if (chk && hidden) {
+      chk.addEventListener('change', () => hidden.value = chk.checked ? 'true' : 'false');
+    }
+  })();
+
+  // ---------- Wi-Fi scan & connect ----------
+  (function() {
+    const scanBtn = document.getElementById('btn-scan-wifi-settings');
+    const scanState = document.getElementById('wifi-scan-state');
+    const wifiList = document.getElementById('wifi-network-list');
+    if (!scanBtn) return;
+
+    function renderNetworks(nets) {
+      wifiList.innerHTML = '';
+      if (!nets || !nets.length) {
+        wifiList.innerHTML = '<p class="muted">No networks yet. Tap "Scan Wi‑Fi".</p>';
+        return;
+      }
+      nets.forEach(n => {
+        const item = document.createElement('div');
+        item.className = 'item';
+        item.innerHTML = `
+          <div class="row" style="justify-content:space-between">
+            <div>
+              <strong>${n.ssid}</strong>
+              <div class="muted">${n.bssid} · ${n.signal}% · ${n.security}</div>
+            </div>
+            <form method="post" action="{{ url_for('wifi.connect_wifi') }}" class="row">
+              <input class="input" type="hidden" name="ssid" value="${n.ssid}">
+              <input class="input" type="password" name="password" placeholder="Password (if required)">
+              <button class="btn success">Connect</button>
+            </form>
+          </div>`;
+        wifiList.appendChild(item);
+      });
+    }
+
+    async function pollWifi(startedAt) {
+      try {
+        const r = await fetch('{{ url_for("wifi.wifi_scan_status") }}');
+        const data = await r.json();
+        scanState.textContent = data.is_scanning ? 'SCANNING…' : 'Idle';
+        if (data.networks && data.networks.length) renderNetworks(data.networks);
+        if (data.is_scanning && Date.now() - startedAt < 20000) {
+          setTimeout(() => pollWifi(startedAt), 1500);
+        }
+      } catch (e) {}
+    }
+
+    scanBtn.addEventListener('click', async () => {
+      scanBtn.disabled = true;
+      scanState.textContent = 'SCANNING…';
+      try {
+        await fetch('{{ url_for("wifi.scan_wifi") }}', { method: 'POST' });
+        pollWifi(Date.now());
+      } finally {
+        setTimeout(() => { scanBtn.disabled = false; }, 1500);
+      }
+    });
+  })();
 </script>
 {% endblock %}

@@ -4,7 +4,7 @@ import re
 import time
 import threading
 import subprocess
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from flask import Blueprint, request, redirect, url_for, flash, jsonify
 
 bp = Blueprint("wifi", __name__)
 
@@ -205,6 +205,16 @@ def get_hotspot_status():
     return {"active": False, "ip": None}
 
 
+def get_scanned_networks():
+    with wifi_lock:
+        return scanned_wifi_networks.copy()
+
+
+def is_wifi_scanning():
+    with wifi_lock:
+        return wifi_scanning_enabled
+
+
 def is_internet_connected():
     try:
         subprocess.check_call(
@@ -361,17 +371,20 @@ def wifi_autoconnect_daemon():
 # ---------------------------------------------------------------------
 @bp.route("/wifi")
 def wifi_page():
-    with wifi_lock:
-        nets = scanned_wifi_networks.copy()
-        is_scan = wifi_scanning_enabled
+    # Wi-Fi and hotspot controls now live on the Settings page - redirect
+    # old links/bookmarks there instead of keeping a second, separate tab.
+    return redirect(url_for("azan.settings"))
+
+
+@bp.route("/toggle_auto_hotspot", methods=["POST"])
+def toggle_auto_hotspot():
+    enabled = request.form.get("enable_auto_hotspot") == "true"
     with _config_lock:
-        current_cfg = _load_config()
-    hs = get_hotspot_status()
-    return render_template("wifi.html",
-                           scanned_networks=nets,
-                           is_scanning=is_scan,
-                           cfg=current_cfg,
-                           hotspot_status=hs)
+        cfg = _load_config()
+        cfg["auto_hotspot_enabled"] = enabled
+        _save_config(cfg)
+    flash("Automatic hotspot " + ("enabled." if enabled else "disabled."), "success")
+    return redirect(url_for("azan.settings"))
 
 
 @bp.route("/scan_wifi", methods=["POST"])
@@ -380,12 +393,12 @@ def scan_wifi():
     with wifi_lock:
         if wifi_scanning_enabled:
             flash("Wi-Fi scan already in progress.", "info")
-            return redirect(url_for("wifi.wifi_page"))
+            return redirect(url_for("azan.settings"))
         wifi_scanning_enabled = True
         scanned_wifi_networks.clear()
     threading.Thread(target=scan_wifi_networks_background, daemon=True).start()
     flash("Wi-Fi scan started.", "success")
-    return redirect(url_for("wifi.wifi_page"))
+    return redirect(url_for("azan.settings"))
 
 
 
@@ -402,7 +415,7 @@ def connect_wifi():
     password = request.form.get("password") or ""
     if not ssid:
         flash("SSID required.", "danger")
-        return redirect(url_for("wifi.wifi_page"))
+        return redirect(url_for("azan.settings"))
 
     ok, msg = connect_to_wifi_cmd(ssid, password)
 
@@ -412,7 +425,7 @@ def connect_wifi():
         # important: we still saved to config even if nmcli failed
         flash(f"Saved Wi-Fi for {ssid}, but connect failed: {msg}", "warning")
 
-    return redirect(url_for("wifi.wifi_page"))
+    return redirect(url_for("azan.settings"))
 
 
 @bp.route("/save_hotspot_config", methods=["POST"])
@@ -424,10 +437,10 @@ def save_hotspot_config():
     pw = request.form.get("hotspot_password") or ""
     if not ssid:
         flash("Hotspot name (SSID) is required.", "danger")
-        return redirect(url_for("wifi.wifi_page"))
+        return redirect(url_for("azan.settings"))
     if pw and len(pw) < 8:
         flash("Hotspot password must be at least 8 characters (WPA2 requirement).", "danger")
-        return redirect(url_for("wifi.wifi_page"))
+        return redirect(url_for("azan.settings"))
     with _config_lock:
         current = _load_config()
         current["hotspot_ssid"] = ssid
@@ -435,7 +448,7 @@ def save_hotspot_config():
             current["hotspot_password"] = pw
         _save_config(current)
     flash("Hotspot settings saved. Restart the hotspot for changes to take effect if it's currently running.", "success")
-    return redirect(url_for("wifi.wifi_page"))
+    return redirect(url_for("azan.settings"))
 
 
 @bp.route("/start_hotspot", methods=["POST"])
@@ -456,7 +469,7 @@ def start_hotspot_route():
         flash("Hotspot started.", "success")
     else:
         flash("Failed to start hotspot.", "danger")
-    return redirect(url_for("wifi.wifi_page"))
+    return redirect(url_for("azan.settings"))
 
 
 @bp.route("/stop_hotspot", methods=["POST"])
@@ -469,7 +482,7 @@ def stop_hotspot_route():
         flash("Hotspot stopped.", "success")
     else:
         flash("Failed to stop hotspot.", "danger")
-    return redirect(url_for("wifi.wifi_page"))
+    return redirect(url_for("azan.settings"))
 
 
 @bp.route("/hotspot_status")
