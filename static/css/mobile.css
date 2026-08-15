@@ -87,8 +87,12 @@ html, body {
   color: #fff;
 }
 .sidebar-footer {
-  padding: 16px 18px;
+  padding: 16px 18px 110px;
   border-top: 1px solid var(--border);
+  position: relative;
+  background: linear-gradient(0deg, rgba(0,0,0,.35), transparent 70%),
+              url('/static/img/mosque-skyline.svg') center bottom / cover no-repeat;
+  background-color: var(--bg);
 }
 .sidebar-clock { font-size: 22px; font-weight: 800; color: var(--primary); }
 .sidebar-date { font-size: 12px; color: var(--muted); margin-top: 2px; }

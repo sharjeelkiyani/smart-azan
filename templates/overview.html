@@ -153,7 +153,10 @@
 {% block body_extra %}
 <style>
   .hero-card {
-    background: linear-gradient(135deg, var(--primary-dark), var(--primary));
+    background:
+      linear-gradient(135deg, rgba(10,14,26,.55), rgba(11,110,79,.45)),
+      url('/static/img/mosque-skyline.svg') center bottom / cover no-repeat,
+      linear-gradient(135deg, var(--primary-dark), var(--primary));
     border-radius: 20px;
     padding: 28px;
     color: #fff;
@@ -163,6 +166,7 @@
     gap: 20px;
     flex-wrap: wrap;
     margin-bottom: 16px;
+    min-height: 220px;
   }
   .hero-greeting { opacity: .85; margin-bottom: 6px; }
   .hero-title { font-size: 32px; font-weight: 800; }

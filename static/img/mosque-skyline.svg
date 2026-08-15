@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 320" preserveAspectRatio="xMidYMax slice">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0a0e1a"/>
+      <stop offset="45%" stop-color="#131a3a"/>
+      <stop offset="75%" stop-color="#5a3a5f"/>
+      <stop offset="100%" stop-color="#d97b3f"/>
+    </linearGradient>
+    <radialGradient id="moonglow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect x="0" y="0" width="900" height="320" fill="url(#sky)"/>
+
+  <!-- stars -->
+  <g fill="#ffffff" opacity="0.85">
+    <circle cx="60" cy="40" r="1.6"/>
+    <circle cx="140" cy="70" r="1.2"/>
+    <circle cx="230" cy="30" r="1.4"/>
+    <circle cx="330" cy="55" r="1.1"/>
+    <circle cx="420" cy="25" r="1.6"/>
+    <circle cx="510" cy="65" r="1.2"/>
+    <circle cx="610" cy="35" r="1.4"/>
+    <circle cx="700" cy="60" r="1.1"/>
+    <circle cx="790" cy="30" r="1.6"/>
+    <circle cx="850" cy="80" r="1.2"/>
+    <circle cx="20" cy="100" r="1.1"/>
+    <circle cx="380" cy="90" r="1.1"/>
+  </g>
+
+  <!-- crescent moon -->
+  <g transform="translate(760,55)">
+    <circle cx="0" cy="0" r="26" fill="url(#moonglow)"/>
+    <path d="M10,-16 A18,18 0 1 0 10,16 A14,14 0 1 1 10,-16 Z" fill="#f4f1e6"/>
+  </g>
+
+  <!-- distant skyline (low silhouette buildings) -->
+  <g fill="#05070d" opacity="0.55">
+    <rect x="0" y="230" width="40" height="60"/>
+    <rect x="45" y="215" width="26" height="75"/>
+    <rect x="820" y="220" width="35" height="70"/>
+    <rect x="860" y="240" width="40" height="50"/>
+  </g>
+
+  <!-- main mosque silhouette -->
+  <g fill="#05070d">
+    <!-- left minaret -->
+    <rect x="150" y="140" width="14" height="150"/>
+    <circle cx="157" cy="136" r="9"/>
+    <polygon points="157,110 148,136 166,136"/>
+
+    <!-- right minaret -->
+    <rect x="700" y="140" width="14" height="150"/>
+    <circle cx="707" cy="136" r="9"/>
+    <polygon points="707,110 698,136 716,136"/>
+
+    <!-- side minarets closer to center dome -->
+    <rect x="330" y="165" width="10" height="125"/>
+    <circle cx="335" cy="162" r="7"/>
+    <polygon points="335,142 328,162 342,162"/>
+
+    <rect x="520" y="165" width="10" height="125"/>
+    <circle cx="525" cy="162" r="7"/>
+    <polygon points="525,142 518,162 532,162"/>
+
+    <!-- main building base -->
+    <rect x="290" y="235" width="280" height="55"/>
+
+    <!-- central dome -->
+    <rect x="380" y="205" width="100" height="35"/>
+    <path d="M375,205 Q430,120 485,205 Z"/>
+    <rect x="425" y="95" width="8" height="28"/>
+    <circle cx="429" cy="90" r="6"/>
+
+    <!-- arches on base -->
+    <g fill="#0a0e1a">
+      <path d="M310,290 v-30 a12,12 0 0 1 24,0 v30 Z"/>
+      <path d="M355,290 v-30 a12,12 0 0 1 24,0 v30 Z"/>
+      <path d="M500,290 v-30 a12,12 0 0 1 24,0 v30 Z"/>
+      <path d="M545,290 v-30 a12,12 0 0 1 24,0 v30 Z"/>
+    </g>
+  </g>
+
+  <!-- foreground ground shadow -->
+  <rect x="0" y="290" width="900" height="30" fill="#05070d"/>
+</svg>
