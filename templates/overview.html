@@ -3,49 +3,95 @@
 
 {% block content %}
 
+<div class="azan-dashboard">
+
+  <!-- ============================================================
+       HERO
+       Desktop: wide banner + Quran card on right
+       Mobile: same banner, compact and stacked safely
+       ============================================================ -->
   <section class="hero-card">
     <div class="hero-text">
       <div class="hero-greeting">Assalamu Alaikum 👋</div>
       <div class="hero-title">Smart <span class="accent">Azan</span></div>
-      <div class="hero-tagline">Never miss a prayer. Stay connected with your Creator.</div>
+      <div class="hero-tagline">Never miss a prayer.<br>Stay connected with your Creator.</div>
     </div>
+
     <div class="verse-card" id="verse-card">
       <div class="verse-ref" id="verse-ref">—</div>
       <div class="verse-text" id="verse-text">—</div>
+      <div class="verse-dots" aria-hidden="true">
+        <span class="verse-dot active"></span>
+        <span class="verse-dot"></span>
+        <span class="verse-dot"></span>
+        <span class="verse-dot"></span>
+      </div>
     </div>
   </section>
 
-  <div class="dash-grid">
-    <section class="card">
-      <h2><span class="icon-badge green">{% include "icons/mosque.svg" %}</span> Next Prayer</h2>
-      <div class="row" style="justify-content:space-between;align-items:center">
-        <div>
+  <!-- ============================================================
+       TOP ROW
+       Desktop: Next Prayer | Today's Prayer Times | Weather
+       Tablet/mobile: responsive without overlap
+       ============================================================ -->
+  <div class="overview-grid overview-grid-top">
+
+    <section class="card dashboard-card next-prayer-card">
+      <h2>
+        <span class="icon-badge green">{% include "icons/mosque.svg" %}</span>
+        Next Prayer
+      </h2>
+
+      <div class="next-prayer-layout">
+        <div class="next-prayer-copy">
           <div class="next-prayer-name">{{ next_prayer or '—' }}</div>
           <div class="countdown" id="countdown">--:--:--</div>
-          <div class="muted" id="next-prayer-time">
-            {% if next_prayer_iso %}at {{ next_prayer_iso[11:16] }}{% endif %}
+
+          <div class="next-prayer-meta" id="next-prayer-time">
+            {% if next_prayer_iso %}
+              {{ next_prayer_iso[11:16] }} <span class="meta-dot">•</span> Today
+            {% endif %}
           </div>
         </div>
+
         <div class="ring-wrap">
-          <svg width="90" height="90" viewBox="0 0 90 90">
-            <circle cx="45" cy="45" r="38" stroke="var(--border)" stroke-width="8" fill="none"/>
-            <circle id="ring-progress" cx="45" cy="45" r="38" stroke="var(--primary)" stroke-width="8"
-                    fill="none" stroke-linecap="round" stroke-dasharray="238.76" stroke-dashoffset="238.76"
-                    transform="rotate(-90 45 45)"/>
+          <svg class="prayer-ring" viewBox="0 0 120 120" aria-hidden="true">
+            <circle
+              cx="60" cy="60" r="50"
+              stroke="rgba(90, 168, 159, .18)"
+              stroke-width="9"
+              fill="none"
+            />
+            <circle
+              id="ring-progress"
+              cx="60" cy="60" r="50"
+              stroke="var(--success)"
+              stroke-width="9"
+              fill="none"
+              stroke-linecap="round"
+              stroke-dasharray="314.159"
+              stroke-dashoffset="314.159"
+              transform="rotate(-90 60 60)"
+            />
           </svg>
           <span class="ring-icon">🌙</span>
         </div>
       </div>
-      <div class="pill" style="margin-top:10px">🔊 Athan will be played automatically</div>
+
+      <div class="auto-athan-note">🔊 Athan will be played automatically</div>
     </section>
 
-    <section class="card">
-      <h2><span class="icon-badge blue">{% include "icons/calendar.svg" %}</span> Today's Prayer Times</h2>
-      <div class="list">
+    <section class="card dashboard-card prayer-times-card">
+      <h2>
+        <span class="icon-badge blue">{% include "icons/calendar.svg" %}</span>
+        Today's Prayer Times
+      </h2>
+
+      <div class="prayer-list">
         {% for t in today_times %}
-          <div class="row" style="justify-content:space-between">
-            <span>{{ t.name }}</span>
-            <strong class="{{ 'accent-text' if t.name == next_prayer else '' }}">{{ t.time }}</strong>
+          <div class="prayer-time-row {{ 'active' if t.name == next_prayer else '' }}">
+            <span class="prayer-time-name">{{ t.name }}</span>
+            <strong>{{ t.time }}</strong>
           </div>
         {% else %}
           <p class="muted">No timetable for today - upload one on the Prayer Times page.</p>
@@ -53,313 +99,1350 @@
       </div>
     </section>
 
-    <section class="card">
-      <h2><span class="icon-badge cyan">{% include "icons/map-pin.svg" %}</span> Location &amp; Weather</h2>
+    <section class="card dashboard-card weather-card">
+      <h2>
+        <span class="icon-badge cyan">{% include "icons/map-pin.svg" %}</span>
+        Location &amp; Weather
+      </h2>
+
       {% if weather %}
-        <div class="weather-temp">{{ weather.temperature_c }}°C</div>
-        <div class="muted">{{ weather.condition }}</div>
-        <div class="row" style="margin-top:10px;gap:8px">
-          <div class="pill">💧 {{ weather.humidity_pct }}%</div>
-          <div class="pill">💨 {{ weather.wind_kmh }} km/h</div>
-          <div class="pill">🔽 {{ weather.pressure_hpa }} hPa</div>
+        <div class="weather-main">
+          <div>
+            <div class="weather-location">
+              {{ cfg.get('location_name', 'Current Location') }}
+            </div>
+            <div class="weather-temp">{{ weather.temperature_c }}°C</div>
+            <div class="muted weather-condition">{{ weather.condition }}</div>
+          </div>
+
+          <div class="weather-moon" aria-hidden="true">🌙</div>
+        </div>
+
+        <div class="weather-stats">
+          <div class="weather-stat">
+            <span class="muted">💧 Humidity</span>
+            <strong>{{ weather.humidity_pct }}%</strong>
+          </div>
+          <div class="weather-stat">
+            <span class="muted">💨 Wind</span>
+            <strong>{{ weather.wind_kmh }} km/h</strong>
+          </div>
+          <div class="weather-stat">
+            <span class="muted">◴ Pressure</span>
+            <strong>{{ weather.pressure_hpa }} hPa</strong>
+          </div>
         </div>
       {% else %}
-        <p class="muted">No location set yet.</p>
-        <button class="btn primary small" type="button" onclick="useMyLocationForWeather()">📍 Use My Location</button>
-        <p class="muted" id="weather-location-hint" style="margin-top:8px"></p>
+        <div class="empty-weather">
+          <p class="muted">No location set yet.</p>
+          <button class="btn primary small" type="button" onclick="useMyLocationForWeather()">
+            📍 Use My Location
+          </button>
+          <p class="muted" id="weather-location-hint"></p>
+        </div>
       {% endif %}
     </section>
 
-    <section class="card">
-      <h2><span class="icon-badge blue">{% include "icons/volume.svg" %}</span> Azan Status</h2>
-      <div class="row" style="gap:8px">
-        <span class="pill" style="background:rgba(52,211,153,.15);color:var(--success)">✓ System is Active</span>
-      </div>
-      <p class="muted" style="margin-top:8px">
-        Next Azan: <strong>{{ next_prayer or '—' }}</strong> ·
-        Speaker: <strong>{{ cfg.get('speaker_name', 'Main Speaker') }}</strong>
-      </p>
-      <div class="waveform" id="waveform"></div>
-      <div class="row" style="gap:8px;margin-top:10px">
-        <form method="post" action="{{ url_for('azan.manual_play_azan') }}">
-          <input type="hidden" name="prayer" value="{{ next_prayer or 'Fajr' }}">
-          <button class="btn success" type="submit">🔊 Test Azan</button>
-        </form>
-      </div>
-    </section>
-
-    <section class="card">
-      <h2><span class="icon-badge amber">{% include "icons/zap.svg" %}</span> Quick Controls</h2>
-      <div class="quick-grid">
-        <button class="btn ghost" type="button" onclick="quickVolume(0)">🔇<br>Mute All</button>
-        <form method="post" action="{{ url_for('azan.manual_play_azan') }}">
-          <input type="hidden" name="prayer" value="{{ next_prayer or 'Fajr' }}">
-          <button class="btn success" type="submit">🔊<br>Test Azan</button>
-        </form>
-        <button class="btn ghost" type="button" onclick="quickVolume(+10)">🔊<br>Increase Volume</button>
-        <button class="btn ghost" type="button" onclick="quickVolume(-10)">🔉<br>Decrease Volume</button>
-        <button class="btn ghost" type="button" onclick="location.reload()">🔄<br>Refresh Times</button>
-        <button class="btn ghost" type="button" onclick="checkTimeSync()">⏱<br>Sync Time</button>
-      </div>
-      <div class="muted" id="quick-hint" style="margin-top:8px"></div>
-    </section>
-
-    <section class="card jumma-card">
-      <h2><span class="icon-badge purple">{% include "icons/moon.svg" %}</span> Jumma Settings</h2>
-      <form method="post" action="{{ url_for('azan.settings') }}">
-        <input type="hidden" name="form_id" value="jumma">
-        <div class="row" style="justify-content:space-between">
-          <span class="muted">Khutbah time</span>
-          <input class="input" style="max-width:120px" type="time" name="khutbah_time"
-                 value="{{ cfg.get('friday_dua', {}).get('khutbah_time', '') }}">
-        </div>
-        <div class="row" style="justify-content:space-between;margin-top:8px">
-          <span class="muted">Friday dua time</span>
-          <input class="input" style="max-width:120px" type="time" name="friday_dua_time"
-                 value="{{ cfg.get('friday_dua', {}).get('time', '') }}">
-        </div>
-        <button class="btn primary small" type="submit" style="margin-top:10px">Save</button>
-      </form>
-      <p class="muted" style="margin-top:10px">
-        Khutbah audio: <strong>{{ cfg.get('friday_dua', {}).get('khutbah_file') or 'none uploaded' }}</strong> ·
-        <a href="{{ url_for('azan.azan_page') }}">Upload on Azan Settings →</a>
-      </p>
-    </section>
-
-    <section class="card">
-      <h2><span class="icon-badge orange">{% include "icons/bell.svg" %}</span> Notifications</h2>
-      <p class="muted">
-        {{ 'Enabled' if cfg.get('notifications_enabled') else 'Disabled' }} ·
-        Reminder {{ cfg.get('reminder_minutes_before_azan', 10) }} min before azan.
-        <a href="{{ url_for('dashboard.notifications_page') }}">Manage →</a>
-      </p>
-    </section>
   </div>
 
+  <!-- ============================================================
+       SECOND ROW
+       Desktop: Azan Status | Quick Controls | Jumma+Notifications
+       Mobile: safe responsive placement
+       ============================================================ -->
+  <div class="overview-grid overview-grid-bottom">
+
+    <section class="card dashboard-card azan-status-card">
+      <h2>
+        <span class="icon-badge blue">{% include "icons/volume.svg" %}</span>
+        Azan Status
+      </h2>
+
+      <div class="system-active">
+        <span class="system-active-dot">✓</span>
+        <span>System is Active</span>
+      </div>
+
+      <div class="azan-status-copy">
+        <div>♩ &nbsp; Next Azan: <strong>{{ next_prayer or '—' }}</strong></div>
+        <div>🔈 &nbsp; Speaker: <strong>{{ cfg.get('speaker_name', 'Main Speaker') }}</strong></div>
+      </div>
+
+      <div class="waveform" id="waveform"></div>
+
+      <div class="azan-actions">
+        <form method="post" action="{{ url_for('azan.manual_play_azan') }}">
+          <input type="hidden" name="prayer" value="{{ next_prayer or 'Fajr' }}">
+          <button class="btn success azan-main-btn" type="submit">🔊 Test Azan</button>
+        </form>
+
+        <!-- Visual placeholder only. Connect to your existing stop-audio endpoint if one exists. -->
+        <button class="btn ghost azan-main-btn" type="button" id="stop-azan-ui" title="Connect to existing stop-audio backend action">
+          ■ Stop
+        </button>
+      </div>
+
+      <div class="muted action-hint" id="azan-action-hint"></div>
+    </section>
+
+    <section class="card dashboard-card quick-controls-card">
+      <h2>
+        <span class="icon-badge amber">{% include "icons/zap.svg" %}</span>
+        Quick Controls
+      </h2>
+
+      <div class="quick-grid">
+        <button class="quick-control danger" type="button" onclick="quickVolume(0)">
+          <span class="quick-icon">🔇</span>
+          <span>Mute All</span>
+        </button>
+
+        <form method="post" action="{{ url_for('azan.manual_play_azan') }}">
+          <input type="hidden" name="prayer" value="{{ next_prayer or 'Fajr' }}">
+          <button class="quick-control success-control" type="submit">
+            <span class="quick-icon">🔊</span>
+            <span>Test Azan</span>
+          </button>
+        </form>
+
+        <button class="quick-control blue-control" type="button" onclick="quickVolume(+10)">
+          <span class="quick-icon">🔊+</span>
+          <span>Increase Volume</span>
+        </button>
+
+        <button class="quick-control blue-control" type="button" onclick="quickVolume(-10)">
+          <span class="quick-icon">🔉−</span>
+          <span>Decrease Volume</span>
+        </button>
+
+        <button class="quick-control purple-control" type="button" onclick="location.reload()">
+          <span class="quick-icon">⟳</span>
+          <span>Refresh Times</span>
+        </button>
+
+        <button class="quick-control purple-control" type="button" onclick="checkTimeSync()">
+          <span class="quick-icon">⟲</span>
+          <span>Sync Time</span>
+        </button>
+      </div>
+
+      <div class="muted action-hint" id="quick-hint"></div>
+    </section>
+
+    <div class="settings-stack">
+
+      <section class="card dashboard-card jumma-card">
+        <h2>
+          <span class="icon-badge purple">{% include "icons/moon.svg" %}</span>
+          Jumma Settings
+        </h2>
+
+        <form method="post" action="{{ url_for('azan.settings') }}">
+          <input type="hidden" name="form_id" value="jumma">
+
+          <div class="setting-row">
+            <span class="muted">Khutbah time</span>
+            <input
+              class="input compact-time-input"
+              type="time"
+              name="khutbah_time"
+              value="{{ cfg.get('friday_dua', {}).get('khutbah_time', '') }}"
+            >
+          </div>
+
+          <div class="setting-row">
+            <span class="muted">Friday dua time</span>
+            <input
+              class="input compact-time-input"
+              type="time"
+              name="friday_dua_time"
+              value="{{ cfg.get('friday_dua', {}).get('time', '') }}"
+            >
+          </div>
+
+          <button class="btn primary small" type="submit">Save</button>
+        </form>
+
+        <p class="muted jumma-help">
+          Khutbah audio:
+          <strong>{{ cfg.get('friday_dua', {}).get('khutbah_file') or 'none uploaded' }}</strong>
+          · <a href="{{ url_for('azan.azan_page') }}">Upload →</a>
+        </p>
+      </section>
+
+      <section class="card dashboard-card notifications-card">
+        <h2>
+          <span class="icon-badge orange">{% include "icons/bell.svg" %}</span>
+          Notifications
+        </h2>
+
+        <div class="notification-row">
+          <div>
+            <div class="notification-label">Azan Notifications</div>
+            <div class="muted">
+              {{ 'Enabled' if cfg.get('notifications_enabled') else 'Disabled' }}
+            </div>
+          </div>
+
+          <span class="status-switch {{ 'on' if cfg.get('notifications_enabled') else '' }}" aria-hidden="true">
+            <span></span>
+          </span>
+        </div>
+
+        <div class="notification-row reminder-row">
+          <span class="muted">Reminder Before Azan</span>
+          <strong>{{ cfg.get('reminder_minutes_before_azan', 10) }} minutes</strong>
+        </div>
+
+        <a class="manage-link" href="{{ url_for('dashboard.notifications_page') }}">Manage notifications →</a>
+      </section>
+
+    </div>
+  </div>
+
+  <!-- ============================================================
+       SYSTEM INFO
+       ============================================================ -->
   <section class="card system-info-bar">
-    <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:16px">
-      <div><span class="muted">Version</span><br><strong>v2.1.0</strong></div>
-      <div><span class="muted">Azan Source</span><br><strong>Local timetable</strong></div>
-      <div><span class="muted">Time Source</span><br><strong>{{ 'Internet (NTP)' if ntp_synced else 'Not synced' }}</strong></div>
-      <div><span class="muted">Hijri Date</span><br><strong>{{ hijri_today }}</strong></div>
-      <div>
-        <span class="pill" style="background:rgba(52,211,153,.15);color:var(--success)">✓ All Systems Operational</span>
+    <h2 class="system-title">ℹ️ System Info</h2>
+
+    <div class="system-info-grid">
+      <div class="system-item">
+        <span class="muted">Version</span>
+        <strong>v2.1.0</strong>
+      </div>
+
+      <div class="system-item">
+        <span class="muted">Azan Source</span>
+        <strong>Local timetable</strong>
+      </div>
+
+      <div class="system-item">
+        <span class="muted">Time Source</span>
+        <strong>{{ 'Internet (NTP)' if ntp_synced else 'Not synced' }}</strong>
+      </div>
+
+      <div class="system-item">
+        <span class="muted">Hijri Date</span>
+        <strong>{{ hijri_today }}</strong>
+      </div>
+
+      <div class="system-item system-health">
+        <span class="system-active-dot">✓</span>
+        <strong>All Systems Operational</strong>
       </div>
     </div>
   </section>
 
+</div>
+
 {% endblock %}
+
 
 {% block body_extra %}
 <style>
-  .hero-card {
-    background:
-      linear-gradient(135deg, rgba(10,14,26,.55), rgba(11,110,79,.45)),
-      url('/static/img/mosque-skyline.svg') center bottom / cover no-repeat,
-      linear-gradient(135deg, var(--primary-dark), var(--primary));
-    border-radius: 20px;
-    padding: 28px;
-    color: #fff;
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 20px;
-    flex-wrap: wrap;
-    margin-bottom: 16px;
-    min-height: 220px;
-  }
-  .hero-greeting { opacity: .85; margin-bottom: 6px; }
-  .hero-title { font-size: 32px; font-weight: 800; }
-  .hero-title .accent { color: var(--gold); }
-  .hero-tagline { opacity: .85; margin-top: 6px; }
-  .verse-card {
-    background: rgba(255,255,255,.1);
-    border-radius: 14px;
-    padding: 16px;
-    max-width: 320px;
-    min-width: 260px;
-  }
-  .verse-ref { color: var(--gold); font-weight: 700; margin-bottom: 6px; }
-  .verse-text { font-size: 14px; line-height: 1.5; }
+  /* ===============================================================
+     SMART AZAN OVERVIEW - RESPONSIVE DESKTOP + MOBILE
+     Uses the existing Flask/Jinja data and routes from the current file.
+     =============================================================== */
 
-  .dash-grid {
+  .azan-dashboard {
+    --dash-bg: #061625;
+    --dash-card: #0b2234;
+    --dash-card-2: #0d2940;
+    --dash-border: rgba(105, 177, 219, .20);
+    --dash-text: #f5f8fb;
+    --dash-muted: #9fb2c2;
+    --dash-green: #45d483;
+    --dash-green-soft: rgba(69, 212, 131, .13);
+    --dash-blue: #42b7ff;
+    --dash-orange: #ff9d3d;
+    --dash-purple: #9e73ff;
+
+    width: 100%;
+    color: var(--dash-text);
+  }
+
+  .azan-dashboard .muted {
+    color: var(--dash-muted);
+  }
+
+  /* ---------- HERO ---------- */
+  .hero-card {
+    min-height: 232px;
+    margin-bottom: 16px;
+    padding: 30px 32px;
+    position: relative;
+    overflow: hidden;
+    border-radius: 22px;
+    border: 1px solid var(--dash-border);
+    color: #fff;
+
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1.25fr) minmax(300px, .75fr);
+    gap: 30px;
+    align-items: center;
+
+    background:
+      linear-gradient(90deg,
+        rgba(5, 22, 38, .88) 0%,
+        rgba(7, 25, 43, .55) 45%,
+        rgba(5, 22, 38, .76) 100%),
+      url('/static/img/mosque-skyline.svg') center 64% / cover no-repeat,
+      radial-gradient(circle at 58% 18%, #183c64 0%, #0c2238 55%, #071624 100%);
+  }
+
+  .hero-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(circle at 40% 15%, rgba(255,255,255,.15) 0 1px, transparent 2px),
+      radial-gradient(circle at 72% 20%, rgba(255,255,255,.13) 0 1px, transparent 2px),
+      radial-gradient(circle at 84% 12%, rgba(255,255,255,.12) 0 1px, transparent 2px);
+    opacity: .7;
+  }
+
+  .hero-text,
+  .verse-card {
+    position: relative;
+    z-index: 1;
+  }
+
+  .hero-greeting {
+    font-size: 16px;
+    font-weight: 600;
+    color: rgba(255,255,255,.92);
+  }
+
+  .hero-title {
+    margin-top: 8px;
+    font-size: clamp(36px, 3.6vw, 50px);
+    line-height: 1;
+    font-weight: 850;
+    letter-spacing: -1.5px;
+  }
+
+  .hero-title .accent {
+    color: var(--dash-green);
+  }
+
+  .hero-tagline {
+    margin-top: 18px;
+    font-size: 17px;
+    line-height: 1.5;
+    color: rgba(238,245,250,.83);
+  }
+
+  .verse-card {
+    justify-self: end;
+    width: min(100%, 390px);
+    padding: 20px 22px;
+    border-radius: 17px;
+    border: 1px solid rgba(107, 186, 228, .22);
+    background: rgba(5, 24, 41, .76);
+    backdrop-filter: blur(7px);
+    -webkit-backdrop-filter: blur(7px);
+  }
+
+  .verse-ref {
+    color: var(--dash-green);
+    font-size: 15px;
+    font-weight: 800;
+    margin-bottom: 10px;
+  }
+
+  .verse-text {
+    min-height: 64px;
+    font-size: 14px;
+    line-height: 1.55;
+    color: #eaf0f5;
+  }
+
+  .verse-dots {
+    display: flex;
+    justify-content: center;
+    gap: 7px;
+    margin-top: 14px;
+  }
+
+  .verse-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #405466;
+  }
+
+  .verse-dot.active {
+    background: var(--dash-green);
+  }
+
+  /* ---------- COMMON GRID / CARD ---------- */
+  .overview-grid {
+    display: grid;
     gap: 16px;
+    margin-bottom: 16px;
   }
-  @media (min-width: 700px) {
-    .dash-grid { grid-template-columns: repeat(2, 1fr); }
+
+  .overview-grid-top {
+    grid-template-columns: 1.04fr 1.08fr 1.08fr;
   }
-  @media (min-width: 1100px) {
-    .dash-grid { grid-template-columns: repeat(3, 1fr); }
+
+  .overview-grid-bottom {
+    grid-template-columns: 1.04fr .94fr 1.08fr;
+    align-items: stretch;
   }
+
+  .dashboard-card,
+  .system-info-bar {
+    margin: 0;
+    border-radius: 19px;
+    border: 1px solid var(--dash-border);
+    background:
+      linear-gradient(145deg,
+        rgba(11, 38, 58, .98),
+        rgba(8, 27, 43, .98));
+    box-shadow: 0 10px 28px rgba(0,0,0,.12);
+  }
+
+  .dashboard-card {
+    min-width: 0;
+    min-height: 0;
+    padding: 20px;
+  }
+
+  .dashboard-card h2,
+  .system-title {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin: 0 0 16px;
+    color: #f4f8fb;
+    font-size: 16px;
+    font-weight: 800;
+  }
+
+  /* ---------- ICON BADGES ---------- */
   .icon-badge {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 30px;
-    height: 30px;
+    width: 29px;
+    height: 29px;
     border-radius: 9px;
-    font-size: 15px;
-    margin-right: 4px;
-    vertical-align: middle;
+    flex: 0 0 29px;
   }
-  .icon-badge.green  { background: rgba(34, 197, 94, .18); color: #22c55e; }
-  .icon-badge.blue   { background: rgba(59, 130, 246, .18); color: #3b82f6; }
-  .icon-badge.cyan   { background: rgba(34, 211, 238, .18); color: #22d3ee; }
-  .icon-badge.amber  { background: rgba(245, 158, 11, .18); color: #f59e0b; }
-  .icon-badge.purple { background: rgba(168, 85, 247, .18); color: #a855f7; }
-  .icon-badge.orange { background: rgba(251, 146, 60, .18); color: #fb923c; }
-  .icon-badge svg { display: block; }
 
-  .jumma-card { position: relative; overflow: hidden; }
-  .jumma-card::after {
-    content: "";
+  .icon-badge.green  { background: rgba(34,197,94,.16); color: #4bd682; }
+  .icon-badge.blue   { background: rgba(59,130,246,.16); color: #4db8ff; }
+  .icon-badge.cyan   { background: rgba(34,211,238,.16); color: #4dd9ee; }
+  .icon-badge.amber  { background: rgba(245,158,11,.16); color: #f7ab35; }
+  .icon-badge.purple { background: rgba(168,85,247,.16); color: #ad7cff; }
+  .icon-badge.orange { background: rgba(251,146,60,.16); color: #ff9c55; }
+
+  .icon-badge svg {
+    width: 18px;
+    height: 18px;
+    display: block;
+  }
+
+  /* ---------- NEXT PRAYER ---------- */
+  .next-prayer-layout {
+    min-height: 174px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 148px;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .next-prayer-name {
+    color: #f7fbff;
+    font-size: 34px;
+    font-weight: 800;
+    letter-spacing: -.6px;
+  }
+
+  .countdown {
+    margin-top: 5px;
+    color: var(--dash-green);
+    font-size: clamp(31px, 3vw, 42px);
+    line-height: 1.05;
+    font-weight: 850;
+    letter-spacing: .4px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .next-prayer-meta {
+    margin-top: 12px;
+    color: #e1e8ee;
+    font-size: 14px;
+  }
+
+  .meta-dot {
+    color: var(--dash-green);
+    padding: 0 4px;
+  }
+
+  .ring-wrap {
+    width: 140px;
+    height: 140px;
+    position: relative;
+    display: grid;
+    place-items: center;
+    justify-self: end;
+  }
+
+  .prayer-ring {
+    width: 140px;
+    height: 140px;
+    display: block;
+  }
+
+  .ring-icon {
     position: absolute;
-    right: -16px;
-    bottom: -18px;
-    width: 170px;
-    height: 105px;
-    background-color: rgba(168, 85, 247, 0.4);
-    -webkit-mask: url('/static/img/mosque-skyline.svg') center bottom / cover no-repeat;
-    mask: url('/static/img/mosque-skyline.svg') center bottom / cover no-repeat;
-    -webkit-mask-position: center 30%;
-    mask-position: center 30%;
-    pointer-events: none;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 46px;
   }
 
-  .next-prayer-name { font-size: 22px; font-weight: 800; color: var(--primary); }
-  .countdown { font-size: 30px; font-weight: 800; margin-top: 4px; }
-  .ring-wrap { position: relative; width: 90px; height: 90px; }
-  .ring-icon { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 22px; }
-  .accent-text { color: var(--gold); }
+  .auto-athan-note {
+    padding: 12px 13px;
+    border-radius: 11px;
+    border: 1px solid rgba(109,178,219,.08);
+    background: rgba(12, 39, 59, .72);
+    color: #dce8f0;
+    font-size: 12px;
+  }
+
+  /* ---------- PRAYER TIMES ---------- */
+  .prayer-list {
+    display: grid;
+  }
+
+  .prayer-time-row {
+    min-height: 35px;
+    padding: 7px 9px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+    border-bottom: 1px solid rgba(255,255,255,.05);
+    border-radius: 8px;
+    color: #dfe7ed;
+    font-size: 14px;
+  }
+
+  .prayer-time-row:last-child {
+    border-bottom: 0;
+  }
+
+  .prayer-time-row.active {
+    margin-top: 3px;
+    border-bottom: 0;
+    color: #ecfff6;
+    background: linear-gradient(90deg,
+      rgba(31, 170, 119, .25),
+      rgba(31, 170, 119, .10));
+  }
+
+  .prayer-time-row.active .prayer-time-name {
+    color: var(--dash-green);
+    font-weight: 800;
+  }
+
+  /* ---------- WEATHER ---------- */
+  .weather-main {
+    min-height: 125px;
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: center;
+  }
+
+  .weather-location {
+    color: #e9f0f5;
+    font-size: 14px;
+    font-weight: 650;
+  }
+
+  .weather-temp {
+    margin-top: 13px;
+    color: #f5f8fb;
+    font-size: 40px;
+    line-height: 1;
+    font-weight: 850;
+  }
+
+  .weather-condition {
+    margin-top: 7px;
+    font-size: 13px;
+  }
+
+  .weather-moon {
+    font-size: 62px;
+    filter: drop-shadow(0 8px 15px rgba(0,0,0,.15));
+  }
+
+  .weather-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0,1fr));
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .weather-stat {
+    min-width: 0;
+    padding: 10px;
+    border-radius: 11px;
+    border: 1px solid rgba(255,255,255,.05);
+    background: rgba(18, 50, 74, .68);
+  }
+
+  .weather-stat span {
+    display: block;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  .weather-stat strong {
+    display: block;
+    margin-top: 4px;
+    color: #f7fbff;
+    font-size: 15px;
+    white-space: nowrap;
+  }
+
+  /* ---------- AZAN STATUS ---------- */
+  .system-active {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    color: var(--dash-green);
+    font-weight: 800;
+  }
+
+  .system-active-dot {
+    width: 20px;
+    height: 20px;
+    display: inline-grid;
+    place-items: center;
+    flex: 0 0 20px;
+    border-radius: 50%;
+    color: #072318;
+    background: var(--dash-green);
+    font-size: 12px;
+    font-weight: 900;
+  }
+
+  .azan-status-copy {
+    display: grid;
+    gap: 8px;
+    margin-top: 13px;
+    color: #c4d0d9;
+    font-size: 13px;
+  }
 
   .waveform {
+    height: 62px;
+    margin-top: 15px;
     display: flex;
     align-items: flex-end;
     gap: 3px;
-    height: 40px;
+    overflow: hidden;
+  }
+
+  .waveform span {
+    flex: 1 1 3px;
+    min-width: 3px;
+    max-width: 7px;
+    border-radius: 4px 4px 2px 2px;
+    background: linear-gradient(180deg, #40d287, #1697a9);
+    opacity: .95;
+  }
+
+  .azan-actions {
+    display: grid;
+    grid-template-columns: 1.15fr .9fr;
+    gap: 9px;
     margin-top: 12px;
   }
-  .waveform span {
-    flex: 1;
-    background: var(--primary);
-    border-radius: 2px;
-    opacity: .5;
+
+  .azan-actions form {
+    margin: 0;
   }
 
+  .azan-main-btn {
+    width: 100%;
+    min-height: 42px;
+  }
+
+  .action-hint {
+    min-height: 16px;
+    margin-top: 7px;
+    font-size: 11px;
+  }
+
+  /* ---------- QUICK CONTROLS ---------- */
   .quick-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
+    grid-template-columns: repeat(3, minmax(0,1fr));
+    gap: 9px;
   }
-  .quick-grid .btn, .quick-grid form .btn { width: 100%; font-size: 12px; line-height: 1.4; }
 
-  .weather-temp { font-size: 34px; font-weight: 800; }
+  .quick-grid form {
+    margin: 0;
+  }
+
+  .quick-control {
+    width: 100%;
+    min-height: 86px;
+    padding: 10px 7px;
+    border-radius: 13px;
+    border: 1px solid rgba(255,255,255,.06);
+    background: rgba(17, 47, 71, .85);
+    color: #f2f7fb;
+    cursor: pointer;
+
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 7px;
+
+    text-align: center;
+    font-size: 11px;
+    line-height: 1.25;
+  }
+
+  .quick-control:hover {
+    filter: brightness(1.08);
+    transform: translateY(-1px);
+  }
+
+  .quick-icon {
+    font-size: 21px;
+  }
+
+  .quick-control.danger { color: #ff7b74; }
+  .quick-control.success-control { color: #7fe1a4; }
+  .quick-control.blue-control { color: #73c9ff; }
+  .quick-control.purple-control { color: #b99bff; }
+
+  /* ---------- RIGHT SETTINGS STACK ---------- */
+  .settings-stack {
+    min-width: 0;
+    display: grid;
+    grid-template-rows: 1fr 1fr;
+    gap: 14px;
+  }
+
+  .jumma-card {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .jumma-card::after {
+    content: "";
+    position: absolute;
+    right: -22px;
+    bottom: -20px;
+    width: 150px;
+    height: 95px;
+    background-color: rgba(168, 85, 247, .42);
+    -webkit-mask: url('/static/img/mosque-skyline.svg') center bottom / cover no-repeat;
+    mask: url('/static/img/mosque-skyline.svg') center bottom / cover no-repeat;
+    pointer-events: none;
+    opacity: .75;
+  }
+
+  .jumma-card form,
+  .jumma-card h2,
+  .jumma-help {
+    position: relative;
+    z-index: 1;
+  }
+
+  .setting-row,
+  .notification-row {
+    min-height: 38px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .setting-row + .setting-row {
+    margin-top: 7px;
+  }
+
+  .compact-time-input {
+    width: 118px;
+    max-width: 118px;
+  }
+
+  .jumma-help {
+    margin: 10px 0 0;
+    max-width: calc(100% - 75px);
+    font-size: 11px;
+    line-height: 1.5;
+  }
+
+  .notification-label {
+    color: #eef4f8;
+    font-size: 13px;
+    font-weight: 650;
+  }
+
+  .reminder-row {
+    margin-top: 8px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255,255,255,.06);
+  }
+
+  .manage-link {
+    display: inline-block;
+    margin-top: 10px;
+    color: var(--dash-blue);
+    font-size: 11px;
+    text-decoration: none;
+  }
+
+  .status-switch {
+    position: relative;
+    width: 43px;
+    height: 24px;
+    flex: 0 0 43px;
+    border-radius: 30px;
+    background: #335064;
+  }
+
+  .status-switch span {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #fff;
+  }
+
+  .status-switch.on {
+    background: #28bb70;
+  }
+
+  .status-switch.on span {
+    left: 22px;
+  }
+
+  /* ---------- SYSTEM INFO ---------- */
+  .system-info-bar {
+    padding: 17px 20px;
+  }
+
+  .system-title {
+    margin-bottom: 13px;
+  }
+
+  .system-info-grid {
+    display: grid;
+    grid-template-columns: .7fr 1fr 1fr 1fr 1.25fr;
+    align-items: center;
+  }
+
+  .system-item {
+    min-width: 0;
+    min-height: 43px;
+    padding: 0 17px;
+    border-right: 1px solid rgba(255,255,255,.06);
+  }
+
+  .system-item:first-child {
+    padding-left: 0;
+  }
+
+  .system-item:last-child {
+    padding-right: 0;
+    border-right: 0;
+  }
+
+  .system-item span:not(.system-active-dot) {
+    display: block;
+    font-size: 11px;
+  }
+
+  .system-item strong {
+    display: block;
+    margin-top: 5px;
+    color: #eaf1f6;
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .system-health {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
+
+  .system-health strong {
+    margin-top: 0;
+  }
+
+  /* ===============================================================
+     TABLET
+     =============================================================== */
+  @media (max-width: 1180px) {
+    .overview-grid-top,
+    .overview-grid-bottom {
+      grid-template-columns: repeat(2, minmax(0,1fr));
+    }
+
+    .weather-card,
+    .settings-stack {
+      grid-column: span 2;
+    }
+
+    .settings-stack {
+      grid-template-columns: repeat(2, minmax(0,1fr));
+      grid-template-rows: none;
+    }
+
+    .system-info-grid {
+      grid-template-columns: repeat(3, minmax(0,1fr));
+      gap: 14px;
+    }
+
+    .system-item {
+      padding: 0;
+      border-right: 0;
+    }
+  }
+
+  /* ===============================================================
+     MOBILE / PHONE
+     Targeted to the second reference image.
+     =============================================================== */
+  @media (max-width: 760px) {
+    .azan-dashboard {
+      padding-bottom: 2px;
+    }
+
+    .hero-card {
+      min-height: 0;
+      padding: 18px;
+      grid-template-columns: 1fr;
+      gap: 15px;
+      border-radius: 18px;
+      background:
+        linear-gradient(90deg,
+          rgba(5, 22, 38, .80),
+          rgba(7, 25, 43, .42)),
+        url('/static/img/mosque-skyline.svg') center 72% / cover no-repeat,
+        radial-gradient(circle at 58% 18%, #183c64 0%, #0c2238 55%, #071624 100%);
+    }
+
+    .hero-greeting {
+      font-size: 14px;
+    }
+
+    .hero-title {
+      font-size: 34px;
+    }
+
+    .hero-tagline {
+      margin-top: 12px;
+      font-size: 14px;
+    }
+
+    .verse-card {
+      width: 100%;
+      justify-self: stretch;
+      padding: 15px;
+      background: rgba(5, 24, 41, .78);
+    }
+
+    .verse-ref {
+      font-size: 13px;
+    }
+
+    .verse-text {
+      min-height: 0;
+      font-size: 12px;
+    }
+
+    .overview-grid {
+      gap: 11px;
+      margin-bottom: 11px;
+    }
+
+    .overview-grid-top,
+    .overview-grid-bottom {
+      grid-template-columns: 1fr;
+    }
+
+    .weather-card,
+    .settings-stack {
+      grid-column: auto;
+    }
+
+    .dashboard-card {
+      padding: 15px;
+      border-radius: 16px;
+    }
+
+    .dashboard-card h2 {
+      margin-bottom: 13px;
+      font-size: 14px;
+    }
+
+    .next-prayer-layout {
+      min-height: 145px;
+      grid-template-columns: minmax(0,1fr) 105px;
+    }
+
+    .next-prayer-name {
+      font-size: 28px;
+    }
+
+    .countdown {
+      font-size: 30px;
+    }
+
+    .next-prayer-meta {
+      margin-top: 9px;
+      font-size: 12px;
+    }
+
+    .ring-wrap,
+    .prayer-ring {
+      width: 100px;
+      height: 100px;
+    }
+
+    .ring-icon {
+      font-size: 32px;
+    }
+
+    .auto-athan-note {
+      padding: 10px 11px;
+      font-size: 11px;
+    }
+
+    .prayer-time-row {
+      min-height: 32px;
+      padding: 6px 8px;
+      font-size: 12px;
+    }
+
+    .weather-main {
+      min-height: 105px;
+    }
+
+    .weather-temp {
+      font-size: 34px;
+    }
+
+    .weather-moon {
+      font-size: 50px;
+    }
+
+    .weather-stats {
+      grid-template-columns: repeat(2, minmax(0,1fr));
+    }
+
+    .weather-stat:last-child {
+      grid-column: span 2;
+    }
+
+    .azan-status-card .waveform {
+      height: 52px;
+    }
+
+    .quick-control {
+      min-height: 76px;
+      font-size: 10px;
+    }
+
+    .settings-stack {
+      grid-template-columns: 1fr;
+      grid-template-rows: none;
+    }
+
+    .jumma-help {
+      max-width: calc(100% - 55px);
+    }
+
+    .system-info-bar {
+      padding: 15px;
+    }
+
+    .system-info-grid {
+      grid-template-columns: repeat(2, minmax(0,1fr));
+      gap: 14px 18px;
+    }
+  }
+
+  /* ===============================================================
+     SMALL PHONE
+     =============================================================== */
+  @media (max-width: 430px) {
+    .hero-card {
+      padding: 15px;
+    }
+
+    .hero-title {
+      font-size: 31px;
+    }
+
+    .next-prayer-layout {
+      grid-template-columns: minmax(0,1fr) 92px;
+    }
+
+    .ring-wrap,
+    .prayer-ring {
+      width: 88px;
+      height: 88px;
+    }
+
+    .ring-icon {
+      font-size: 29px;
+    }
+
+    .countdown {
+      font-size: 27px;
+    }
+
+    .quick-grid {
+      grid-template-columns: repeat(3, minmax(0,1fr));
+      gap: 7px;
+    }
+
+    .quick-control {
+      min-height: 72px;
+      padding: 8px 5px;
+      font-size: 9.5px;
+    }
+
+    .weather-stat strong {
+      font-size: 13px;
+    }
+
+    .system-info-grid {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
 </style>
+
+
 <script>
-  // ---------- Quran verse carousel (short paraphrases, auto-rotate) ----------
+  // ---------- Quran verse carousel ----------
   const VERSES = [
     {ref: 'Quran 2:238', text: 'Guard your prayers carefully, including the middle prayer, and stand before God in devotion.'},
     {ref: 'Quran 29:45', text: 'Establish prayer - indeed, prayer restrains one from indecency and wrongdoing.'},
     {ref: 'Quran 20:14', text: 'Establish prayer for My remembrance.'},
     {ref: 'Quran 13:28', text: 'Truly, it is in the remembrance of God that hearts find peace.'},
   ];
+
   let vIdx = 0;
+
   function showVerse(i) {
-    document.getElementById('verse-ref').textContent = VERSES[i].ref;
-    document.getElementById('verse-text').textContent = VERSES[i].text;
+    const ref = document.getElementById('verse-ref');
+    const text = document.getElementById('verse-text');
+    const dots = document.querySelectorAll('.verse-dot');
+
+    if (ref) ref.textContent = VERSES[i].ref;
+    if (text) text.textContent = VERSES[i].text;
+
+    dots.forEach((dot, index) => {
+      dot.classList.toggle('active', index === i);
+    });
   }
+
   showVerse(0);
-  setInterval(() => { vIdx = (vIdx + 1) % VERSES.length; showVerse(vIdx); }, 8000);
+  setInterval(() => {
+    vIdx = (vIdx + 1) % VERSES.length;
+    showVerse(vIdx);
+  }, 8000);
+
 
   // ---------- Countdown ring ----------
   const nextIso = {{ next_prayer_iso|tojson }};
   const prevIso = {{ prev_prayer_iso|tojson }};
-  const RING_CIRC = 238.76;
+  const RING_CIRC = 314.159;
+
   function updateCountdown() {
     const el = document.getElementById('countdown');
-    if (!nextIso) { el.textContent = '—'; return; }
+    const ring = document.getElementById('ring-progress');
+
+    if (!el) return;
+
+    if (!nextIso) {
+      el.textContent = '—';
+      if (ring) ring.setAttribute('stroke-dashoffset', String(RING_CIRC));
+      return;
+    }
+
     const now = new Date();
     const next = new Date(nextIso);
-    let diff = Math.max(0, next - now);
+    const diff = Math.max(0, next - now);
+
     const h = Math.floor(diff / 3600000);
     const m = Math.floor((diff % 3600000) / 60000);
     const s = Math.floor((diff % 60000) / 1000);
-    el.textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
 
-    if (prevIso) {
+    el.textContent =
+      `${String(h).padStart(2,'0')}:` +
+      `${String(m).padStart(2,'0')}:` +
+      `${String(s).padStart(2,'0')}`;
+
+    if (ring && prevIso) {
       const prev = new Date(prevIso);
       const total = next - prev;
       const elapsed = now - prev;
-      const pct = total > 0 ? Math.min(1, Math.max(0, elapsed / total)) : 0;
-      document.getElementById('ring-progress').setAttribute('stroke-dashoffset', String(RING_CIRC * (1 - pct)));
+      const pct = total > 0
+        ? Math.min(1, Math.max(0, elapsed / total))
+        : 0;
+
+      ring.setAttribute(
+        'stroke-dashoffset',
+        String(RING_CIRC * (1 - pct))
+      );
     }
   }
+
   updateCountdown();
   setInterval(updateCountdown, 1000);
 
-  // ---------- Waveform (decorative) ----------
-  (function(){
+
+  // ---------- Waveform ----------
+  (function () {
     const wf = document.getElementById('waveform');
-    for (let i = 0; i < 40; i++) {
+    if (!wf) return;
+
+    const fixedHeights = [
+      25,40,30,48,36,55,43,60,34,51,
+      42,58,46,63,39,52,35,56,43,61,
+      48,67,41,58,37,54,45,62,39,55,
+      47,64,42,57,36,52,44,59,39,49
+    ];
+
+    fixedHeights.forEach(h => {
       const bar = document.createElement('span');
-      bar.style.height = (20 + Math.random() * 20) + 'px';
+      bar.style.height = `${h}px`;
       wf.appendChild(bar);
-    }
+    });
   })();
+
 
   // ---------- Quick controls ----------
   async function quickVolume(delta) {
     const hint = document.getElementById('quick-hint');
-    try {
-      const r = await fetch('{{ url_for("azan.audio_status") }}');
-      const j = await r.json();
-      // audio_status doesn't return volume directly; re-fetch config via settings page isn't ideal,
-      // so just send the delta-adjusted target using current known value from the page if available.
-    } catch (e) {}
     const current = {{ cfg.get('volume', 70) }};
     const target = Math.max(0, Math.min(100, current + delta));
-    const body = new URLSearchParams({volume: String(target)}).toString();
-    const resp = await fetch('{{ url_for("azan.set_volume_ajax") }}', {
-      method: 'POST', headers: {'Content-Type':'application/x-www-form-urlencoded'}, body
-    });
-    const j = await resp.json();
-    hint.textContent = j.status === 'success' ? `Volume set to ${j.volume}%` : 'Volume change failed';
+
+    try {
+      const body = new URLSearchParams({volume: String(target)}).toString();
+
+      const resp = await fetch('{{ url_for("azan.set_volume_ajax") }}', {
+        method: 'POST',
+        headers: {'Content-Type':'application/x-www-form-urlencoded'},
+        body
+      });
+
+      const j = await resp.json();
+
+      if (hint) {
+        hint.textContent =
+          j.status === 'success'
+            ? `Volume set to ${j.volume}%`
+            : 'Volume change failed';
+      }
+    } catch (e) {
+      if (hint) hint.textContent = 'Volume change failed.';
+    }
   }
+
 
   async function checkTimeSync() {
     const hint = document.getElementById('quick-hint');
-    hint.textContent = 'Checking...';
+    if (hint) hint.textContent = 'Checking…';
+
     try {
       const r = await fetch('{{ url_for("dashboard.time_sync_status") }}');
       const j = await r.json();
-      hint.textContent = j.synced ? 'Time is synced via NTP.' : 'Not synced to NTP right now.';
+
+      if (hint) {
+        hint.textContent =
+          j.synced
+            ? 'Time is synced via NTP.'
+            : 'Not synced to NTP right now.';
+      }
     } catch (e) {
-      hint.textContent = 'Could not check time sync.';
+      if (hint) hint.textContent = 'Could not check time sync.';
     }
   }
+
 
   function useMyLocationForWeather() {
     const hint = document.getElementById('weather-location-hint');
     if (!hint) return;
-    if (!('geolocation' in navigator)) { hint.textContent = 'Geolocation is not supported on this device.'; return; }
+
+    if (!('geolocation' in navigator)) {
+      hint.textContent = 'Geolocation is not supported on this device.';
+      return;
+    }
+
     hint.textContent = 'Getting your location…';
+
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const body = new URLSearchParams({
-          lat: String(pos.coords.latitude), lon: String(pos.coords.longitude),
+          lat: String(pos.coords.latitude),
+          lon: String(pos.coords.longitude),
         }).toString();
-        const r = await fetch('{{ url_for("dashboard.qibla_save_location") }}', {
-          method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body
-        });
-        const j = await r.json();
-        if (j.ok) { hint.textContent = 'Location saved - refreshing…'; location.reload(); }
-        else { hint.textContent = 'Failed to save location.'; }
+
+        try {
+          const r = await fetch('{{ url_for("dashboard.qibla_save_location") }}', {
+            method: 'POST',
+            headers: {'Content-Type':'application/x-www-form-urlencoded'},
+            body
+          });
+
+          const j = await r.json();
+
+          if (j.ok) {
+            hint.textContent = 'Location saved - refreshing…';
+            location.reload();
+          } else {
+            hint.textContent = 'Failed to save location.';
+          }
+        } catch (e) {
+          hint.textContent = 'Failed to save location.';
+        }
       },
-      (err) => { hint.textContent = 'Could not get GPS location: ' + err.message; },
-      { enableHighAccuracy: true, timeout: 10000 }
+      (err) => {
+        hint.textContent = 'Could not get GPS location: ' + err.message;
+      },
+      {enableHighAccuracy:true, timeout:10000}
     );
+  }
+
+
+  // ---------- Stop button UI placeholder ----------
+  // The uploaded current template does not expose a stop-audio route,
+  // so no backend URL is invented here.
+  const stopAzanUi = document.getElementById('stop-azan-ui');
+
+  if (stopAzanUi) {
+    stopAzanUi.addEventListener('click', () => {
+      const hint = document.getElementById('azan-action-hint');
+      if (hint) {
+        hint.textContent =
+          'Stop button is ready for wiring to the existing stop-audio backend action.';
+      }
+    });
   }
 </script>
 {% endblock %}

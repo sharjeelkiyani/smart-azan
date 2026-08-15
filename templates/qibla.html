@@ -16,6 +16,9 @@
     <div class="compass-wrap">
       <div class="compass-face">
         <div class="compass-n">N</div>
+        <div class="compass-s">S</div>
+        <div class="compass-e">E</div>
+        <div class="compass-w">W</div>
         <div class="compass-needle" id="qibla-needle"
              style="transform: rotate({{ bearing or 0 }}deg); {{ '' if bearing is not none else 'opacity:.25' }}">🕋</div>
       </div>
@@ -47,6 +50,9 @@
     position: relative;
   }
   .compass-n { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); font-weight: 800; color: var(--muted); }
+  .compass-s { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); font-weight: 800; color: var(--muted); }
+  .compass-e { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-weight: 800; color: var(--muted); }
+  .compass-w { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); font-weight: 800; color: var(--muted); }
   .compass-needle {
     position: absolute; top: 50%; left: 50%;
     width: 0; height: 0;
@@ -142,6 +148,24 @@
   let compassDataReceived = false;
   let compassNoDataTimer = null;
 
+  // Raw compass headings are noisy (magnetometer jitter) and wrap at
+  // 0/360 - naively setting `transform: rotate(Ndeg)` from a mod-360 value
+  // makes the needle spin almost a full circle every time the heading
+  // crosses that boundary (e.g. 359deg -> 2deg gets animated the "long"
+  // way, 357 degrees, instead of the real 3-degree movement). Track both
+  // the smoothed heading and the needle's own rotation as continuous
+  // (unwrapped) numbers and always step by the shortest signed delta, so
+  // the needle only ever moves the direction you actually turned.
+  let smoothedHeading = null;
+  let needleAngle = 0;
+
+  function mod360(x) { return ((x % 360) + 360) % 360; }
+  function shortestDelta(from, to) {
+    let d = mod360(to - from);
+    if (d > 180) d -= 360;
+    return d;
+  }
+
   function enableDeviceCompass() {
     const hint = document.getElementById('compass-hint');
     if (!hasBearing) { hint.textContent = 'Get a Qibla bearing first (GPS or saved location).'; return; }
@@ -155,9 +179,18 @@
       compassDataReceived = true;
       if (compassNoDataTimer) { clearTimeout(compassNoDataTimer); compassNoDataTimer = null; }
 
-      const heading = e.webkitCompassHeading != null ? e.webkitCompassHeading : (360 - e.alpha);
-      const rel = (QIBLA_BEARING - heading + 360) % 360;
-      document.getElementById('qibla-needle').style.transform = `rotate(${rel}deg)`;
+      const rawHeading = e.webkitCompassHeading != null ? e.webkitCompassHeading : (360 - e.alpha);
+
+      // Light smoothing to kill small jitter, done circularly (can't just
+      // average raw degrees across the 0/360 wrap).
+      smoothedHeading = smoothedHeading == null
+        ? rawHeading
+        : smoothedHeading + shortestDelta(smoothedHeading, rawHeading) * 0.2;
+
+      const target = mod360(QIBLA_BEARING - smoothedHeading);
+      needleAngle += shortestDelta(mod360(needleAngle), target);
+
+      document.getElementById('qibla-needle').style.transform = `rotate(${needleAngle}deg)`;
       hint.textContent = 'Rotate your device so the Kaaba icon points up.';
     }
 
