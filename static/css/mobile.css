@@ -45,7 +45,11 @@ html, body {
   flex-shrink: 0;
   background: var(--card);
   border-right: 1px solid var(--border);
-  display: flex;
+  /* display is controlled entirely by .desktop-only (none below 900px,
+     flex !important at/above it). A plain `display: flex` here has equal
+     specificity to `.desktop-only`'s `display: none` and, being declared
+     later in this file, would win the cascade - forcing the sidebar
+     visible on every screen size, including phones. */
   flex-direction: column;
   position: sticky;
   top: 0;

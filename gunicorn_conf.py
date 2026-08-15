@@ -37,3 +37,51 @@ _key = os.path.join(_here, "cert.key")
 if os.path.exists(_cert) and os.path.exists(_key):
     certfile = _cert
     keyfile = _key
+
+# Bound the TLS handshake, in every gthread worker.
+#
+# gunicorn's gthread worker (TConn.init in gunicorn/workers/gthread.py) sets
+# the accepted socket blocking with NO timeout, then calls do_handshake().
+# A client that stalls mid-handshake - a phone that drops wifi/cell signal
+# right after opening the HTTPS connection - leaves that worker thread
+# blocked until Linux's own TCP retransmission timeout, which can be many
+# minutes. With only `threads` worker slots (see above), a handful of
+# stalled phones piling up is enough to freeze the whole app for everyone
+# else - this is exactly what happened in production (see the
+# "TimeoutError: [Errno 110] Connection timed out" in
+# `journalctl -u smart-azan`, right before the service stopped responding).
+#
+# Patched here (not in the vendored gunicorn source) via gunicorn's own
+# post_fork hook, so a `pip install -r requirements.txt` never overwrites it.
+_HANDSHAKE_TIMEOUT = 15  # seconds - generous for a real handshake, tiny next to an OS-level hang
+
+
+def post_fork(server, worker):
+    from gunicorn.workers import gthread
+
+    _orig_init = gthread.TConn.init
+
+    def _bounded_init(self):
+        if self.initialized or not self.cfg.is_ssl:
+            return _orig_init(self)
+        self.initialized = True
+        self.sock.setblocking(True)
+        if self.parser is None:
+            self.sock.settimeout(_HANDSHAKE_TIMEOUT)
+            try:
+                self.sock = gthread.sock.ssl_wrap_socket(self.sock, self.cfg)
+                if not self.cfg.do_handshake_on_connect:
+                    self.sock.do_handshake()
+            finally:
+                self.sock.settimeout(None)  # back to plain blocking for the actual request
+
+            if gthread.sock.is_http2_negotiated(self.sock):
+                self.is_http2 = True
+                self.parser = gthread.http.get_parser(
+                    self.cfg, self.sock, self.client, http2_connection=True
+                )
+                self.parser.initiate_connection()
+                return
+            self.parser = gthread.http.get_parser(self.cfg, self.sock, self.client)
+
+    gthread.TConn.init = _bounded_init
