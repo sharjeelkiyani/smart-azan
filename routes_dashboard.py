@@ -115,6 +115,13 @@ def qibla_save_location():
     return jsonify({"ok": True, "lat": lat, "lon": lon})
 
 
+@bp.route("/geocode")
+def geocode():
+    q = request.args.get("q", "")
+    results = islamic_utils.geocode_city(q)
+    return jsonify({"results": results})
+
+
 # ----------------- Calendar -----------------
 
 @bp.route("/calendar")

@@ -49,7 +49,7 @@ def load_config():
                 "Isha": "default_azan.mp3",
             },
             "duas": [],
-            "friday_dua": {"file": "", "time": "", "khutbah_time": ""},
+            "friday_dua": {"file": "", "time": "", "khutbah_time": "", "khutbah_file": ""},
             "iqama_audio": "iqama.mp3",
             "output_device": "auto",
             "audio_output_mode": "auto",
@@ -82,6 +82,7 @@ def load_config():
     cfg.setdefault("duas", [])
     cfg.setdefault("friday_dua", {"file": "", "time": ""})
     cfg["friday_dua"].setdefault("khutbah_time", "")
+    cfg["friday_dua"].setdefault("khutbah_file", "")
     cfg.setdefault("output_device", "auto")
     cfg.setdefault("audio_output_mode", cfg.get("output_device", "auto"))
     cfg.setdefault("alsa_device", "")
@@ -313,7 +314,7 @@ def scheduler():
                     play_audio(file_, "dua", f"Dua ({day} {t})")
                     played_events.add(eid)
 
-        # --- 3) Friday special ---
+        # --- 3) Friday special: dua + khutbah ---
         friday_dua = current_cfg.get("friday_dua") or {}
         if today_name == "friday":
             ffile = (friday_dua.get("file") or "").strip()
@@ -324,6 +325,15 @@ def scheduler():
                     print(f"[Scheduler] Playing Friday dua {ffile}")
                     play_audio(ffile, "friday_dua", "Friday dua")
                     played_events.add(eid)
+
+            kfile = (friday_dua.get("khutbah_file") or "").strip()
+            ktime = (friday_dua.get("khutbah_time") or "").strip()
+            if kfile and ktime == now.strftime("%H:%M"):
+                keid = f"khutbah_{current_minute_str}"
+                if keid not in played_events:
+                    print(f"[Scheduler] Playing Friday khutbah {kfile}")
+                    play_audio(kfile, "khutbah", "Friday khutbah")
+                    played_events.add(keid)
 
         time.sleep(10)
 

@@ -224,6 +224,30 @@
     </form>
   </section>
 
+  <!-- Friday Khutbah -->
+  <section class="card">
+    <h2>Friday Khutbah</h2>
+    <p class="muted">
+      Current: <strong>{{ fd.get('khutbah_file') or '-' }}</strong>
+      at <strong>{{ fd.get('khutbah_time') or '-' }}</strong>
+    </p>
+    <p class="muted">Uploads and plays automatically at the set time every Friday.</p>
+
+    <form method="post" action="{{ url_for('azan.upload_khutbah_audio') }}" enctype="multipart/form-data" class="grid2 gap">
+      <label>
+        <div class="muted">Khutbah start time (24h)</div>
+        <input type="time" name="khutbah_time" required>
+      </label>
+      <label>
+        <div class="muted">Audio File</div>
+        <input type="file" name="khutbah_file" accept="audio/*,.mp3,.wav,.ogg" required>
+      </label>
+      <div class="row">
+        <button class="btn" type="submit">Upload Khutbah</button>
+      </div>
+    </form>
+  </section>
+
 {% endblock %}
 
 {% block body_extra %}

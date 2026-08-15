@@ -6,6 +6,7 @@ math, weather uses Open-Meteo's free keyless API.
 """
 import json
 import math
+import urllib.parse
 import urllib.request
 
 KAABA_LAT = 21.4225
@@ -57,6 +58,39 @@ def qibla_bearing(lat, lon):
     y = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(dlon)
     bearing = math.degrees(math.atan2(x, y))
     return (bearing + 360) % 360
+
+
+def geocode_city(query, count=5, timeout=5):
+    """Look up a city/postcode name via Open-Meteo's free geocoding API - no
+    key needed. Used instead of browser GPS, since the Geolocation API is
+    blocked by browsers on a plain http:// LAN address (only allowed on
+    https:// or localhost)."""
+    query = (query or "").strip()
+    if not query:
+        return []
+    try:
+        url = (
+            "https://geocoding-api.open-meteo.com/v1/search"
+            f"?name={urllib.parse.quote(query)}&count={count}&language=en&format=json"
+        )
+        with urllib.request.urlopen(url, timeout=timeout) as r:
+            data = json.loads(r.read().decode())
+        out = []
+        for item in data.get("results", []) or []:
+            parts = [item.get("name")]
+            if item.get("admin1"):
+                parts.append(item["admin1"])
+            if item.get("country"):
+                parts.append(item["country"])
+            out.append({
+                "label": ", ".join(p for p in parts if p),
+                "lat": item.get("latitude"),
+                "lon": item.get("longitude"),
+            })
+        return out
+    except Exception as e:
+        print(f"[Geocode] lookup error: {e}")
+        return []
 
 
 def get_weather(lat, lon, timeout=5):

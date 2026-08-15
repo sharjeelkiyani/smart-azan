@@ -218,6 +218,31 @@ def upload_iqama_audio():
     except Exception as e:
         flash(f"Failed to upload Iqama audio: {e}", "danger")
     return redirect(url_for("azan.azan_page"))
+@bp.route("/upload_khutbah_audio", methods=["POST"])
+def upload_khutbah_audio():
+    f = request.files.get("khutbah_file")
+    khutbah_time = (request.form.get("khutbah_time") or "").strip()
+    if not f or f.filename == "":
+        flash("No file selected for Khutbah audio upload.", "danger")
+        return redirect(url_for("azan.azan_page"))
+    filename = f.filename
+    try:
+        _ensure_audio_folder()
+        f.save(os.path.join(_AUDIO_FOLDER, filename))
+        with _config_lock:
+            cfg = _load_config()
+            fd = cfg.get("friday_dua") or {}
+            fd["khutbah_file"] = filename
+            if khutbah_time:
+                fd["khutbah_time"] = khutbah_time
+            cfg["friday_dua"] = fd
+            _save_config(cfg)
+        flash(f"Khutbah audio set to '{filename}' at {khutbah_time or fd.get('khutbah_time', '-')}.", "success")
+    except Exception as e:
+        flash(f"Failed to upload Khutbah audio: {e}", "danger")
+    return redirect(url_for("azan.azan_page"))
+
+
 @bp.route("/upload_after_azan_dua", methods=["POST"])
 def upload_after_azan_dua():
     f = request.files.get("file")

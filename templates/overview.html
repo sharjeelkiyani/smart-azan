@@ -120,6 +120,10 @@
         </div>
         <button class="btn primary small" type="submit" style="margin-top:10px">Save</button>
       </form>
+      <p class="muted" style="margin-top:10px">
+        Khutbah audio: <strong>{{ cfg.get('friday_dua', {}).get('khutbah_file') or 'none uploaded' }}</strong> ·
+        <a href="{{ url_for('azan.azan_page') }}">Upload on Azan Settings →</a>
+      </p>
     </section>
 
     <section class="card">
