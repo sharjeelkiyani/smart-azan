@@ -71,6 +71,17 @@ runs as, so it works unmodified as long as the project lives at
 `~/smart_azan_final` for that user. Only `User=` needs to be filled in
 (`install.sh` does this automatically).
 
+The service runs under **gunicorn** (`gunicorn_conf.py`), not Flask's built-in
+dev server - the dev server leaks connections under sustained load (several
+browser tabs polling status endpoints, a router forwarding traffic to it,
+etc.) until it can no longer accept new ones, which is exactly what its own
+"do not use in production" warning is about. `gunicorn_conf.py` reads the
+port and HTTPS cert from the same `config.json`/`cert.pem`/`cert.key` files
+the app itself uses, and always runs a single worker (multiple would each
+start their own copy of the background scheduler/Bluetooth/Wi-Fi threads,
+racing to play the same azan multiple times) with several threads for real
+request concurrency.
+
 ### Manual install (no install.sh)
 
 ```bash

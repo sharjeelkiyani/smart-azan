@@ -6,7 +6,7 @@ After=network-online.target bluetooth.target sound.target
 [Service]
 User=__USER__
 Type=simple
-ExecStart=%h/smart_azan_final/venv/bin/python %h/smart_azan_final/app.py
+ExecStart=%h/smart_azan_final/venv/bin/gunicorn -c %h/smart_azan_final/gunicorn_conf.py app:app
 WorkingDirectory=%h/smart_azan_final
 ExecStartPre=/bin/sleep 3
 Restart=always
