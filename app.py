@@ -69,6 +69,8 @@ def load_config():
             "port": 5050,
             "notifications_enabled": True,
             "reminder_minutes_before_azan": 10,
+            "mosque_import_enabled": False,
+            "mosque_import_source": "aisha_masjid",
         }
         save_config(cfg)
         return cfg
@@ -94,6 +96,8 @@ def load_config():
     cfg.setdefault("after_azan_dua", "")
     cfg.setdefault("notifications_enabled", True)
     cfg.setdefault("reminder_minutes_before_azan", 10)
+    cfg.setdefault("mosque_import_enabled", False)
+    cfg.setdefault("mosque_import_source", "aisha_masjid")
 
     save_config(cfg)
     return cfg
@@ -211,6 +215,35 @@ def _bluetooth_autoconnect_loop():
 
 
 threading.Thread(target=_bluetooth_autoconnect_loop, daemon=True).start()
+
+
+# ----------------- mosque timetable auto-sync -----------------
+# Opt-in (mosque_import_enabled) - re-fetches the configured mosque's
+# published timetable once a day and merges any changed times into
+# timetable.csv. The site only ever shows "this month", so a daily check is
+# what actually picks up the new month automatically as it rolls over, and
+# picks up any time corrections the mosque publishes mid-month too.
+def _mosque_import_loop():
+    last_run_date = None
+    while True:
+        with config_lock:
+            c = load_config()
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        if c.get("mosque_import_enabled") and last_run_date != today_str:
+            source = c.get("mosque_import_source", "")
+            try:
+                import mosque_import
+                if source == "aisha_masjid":
+                    rows = mosque_import.fetch_aisha_masjid_timetable()
+                    imported, total = mosque_import.merge_into_timetable(rows, TIMETABLE_FILE)
+                    print(f"[MosqueImport] auto-synced {imported} day(s) from {source} ({total} total in timetable)")
+                last_run_date = today_str
+            except Exception as e:
+                print(f"[MosqueImport] auto-sync failed: {e}")
+        time.sleep(3600)
+
+
+threading.Thread(target=_mosque_import_loop, daemon=True).start()
 
 
 # ----------------- audio for scheduler -----------------

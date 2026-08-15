@@ -146,8 +146,11 @@ def calendar_page():
             continue
         if dt.year == y and dt.month == m:
             hijri = islamic_utils.gregorian_to_hijri(dt.date())
-            month_rows.append({"date": d, "day": dt.day, "row": row,
-                                 "hijri": f"{hijri['day']} {hijri['month_name']}"})
+            month_rows.append({
+                "date": d, "day": dt.day, "row": row,
+                "weekday": dt.strftime("%a"), "is_friday": dt.weekday() == 4,
+                "hijri": f"{hijri['day']} {hijri['month_name']}",
+            })
 
     prev_month = (datetime(y, m, 1) - timedelta(days=1))
     next_month = (datetime(y, m, 28) + timedelta(days=7)).replace(day=1)

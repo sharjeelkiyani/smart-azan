@@ -95,11 +95,15 @@ def _find_month_year(heading_candidates):
 TIME_RE = re.compile(r"^\d{1,2}:\d{2}$")
 
 
+def _all_times(cell):
+    """A cell can hold more than one time - e.g. "13:30 / 14:30" on a Friday
+    with two Jumu'ah slots. Returns every HH:MM found, in order."""
+    return re.findall(r"\d{1,2}:\d{2}", cell or "")
+
+
 def _clean_time(cell):
-    """Cells sometimes hold "13:30 / 14:30" (e.g. an extra Jumuah slot) -
-    take the first valid HH:MM found."""
-    m = re.search(r"\d{1,2}:\d{2}", cell or "")
-    return m.group(0) if m else ""
+    times = _all_times(cell)
+    return times[0] if times else ""
 
 
 def fetch_aisha_masjid_timetable(timeout=15):
@@ -138,7 +142,13 @@ def fetch_aisha_masjid_timetable(timeout=15):
             continue
 
         fajr, iqama_fajr = _clean_time(row[1]), _clean_time(row[2])
-        dhuhr, iqama_dhuhr = _clean_time(row[4]), _clean_time(row[5])
+        sunrise = _clean_time(row[3])
+        dhuhr = _clean_time(row[4])
+        dhuhr_iqama_times = _all_times(row[5])
+        iqama_dhuhr = dhuhr_iqama_times[0] if dhuhr_iqama_times else ""
+        # Fridays sometimes carry two Jumu'ah slots in the same cell
+        # ("13:30 / 14:30") - keep the second one separately.
+        jumma_iqama2 = dhuhr_iqama_times[1] if len(dhuhr_iqama_times) > 1 else ""
         asr, iqama_asr = _clean_time(row[6]), _clean_time(row[7])
         maghrib = _clean_time(row[8])
         isha, iqama_isha = _clean_time(row[9]), _clean_time(row[10])
@@ -148,9 +158,11 @@ def fetch_aisha_masjid_timetable(timeout=15):
 
         out.append({
             "Date": date.strftime("%d/%m/%Y"),
-            "Fajr": fajr, "Dhuhr": dhuhr, "Asr": asr, "Maghrib": maghrib, "Isha": isha,
+            "Fajr": fajr, "Sunrise": sunrise, "Dhuhr": dhuhr, "Asr": asr,
+            "Maghrib": maghrib, "Isha": isha,
             "Iqama_Fajr": iqama_fajr, "Iqama_Dhuhr": iqama_dhuhr, "Iqama_Asr": iqama_asr,
             "Iqama_Maghrib": maghrib, "Iqama_Isha": iqama_isha,
+            "Jumma_Iqama2": jumma_iqama2,
         })
 
     if not out:
@@ -158,8 +170,9 @@ def fetch_aisha_masjid_timetable(timeout=15):
     return out
 
 
-CSV_COLUMNS = ["Date", "Fajr", "Dhuhr", "Asr", "Maghrib", "Isha",
-               "Iqama_Fajr", "Iqama_Dhuhr", "Iqama_Asr", "Iqama_Maghrib", "Iqama_Isha"]
+CSV_COLUMNS = ["Date", "Fajr", "Sunrise", "Dhuhr", "Asr", "Maghrib", "Isha",
+               "Iqama_Fajr", "Iqama_Dhuhr", "Iqama_Asr", "Iqama_Maghrib", "Iqama_Isha",
+               "Jumma_Iqama2"]
 
 
 def merge_into_timetable(new_rows, timetable_file="timetable.csv"):

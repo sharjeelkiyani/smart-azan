@@ -55,6 +55,16 @@
     <form method="post" action="{{ url_for('azan.import_timetable_aisha_masjid') }}" class="row">
       <button class="btn secondary" type="submit">🕌 Import from Aisha Masjid (aishamasjid.org.uk)</button>
     </form>
+
+    <form method="post" action="{{ url_for('azan.settings') }}" class="row" style="margin-top:14px;align-items:center">
+      <input type="hidden" name="form_id" value="mosque_import">
+      <label class="row" style="gap:8px">
+        <input type="checkbox" name="mosque_import_enabled"
+               {{ 'checked' if cfg.get('mosque_import_enabled') }}>
+        <span>Automatically re-check and update daily (picks up month changes and any time corrections)</span>
+      </label>
+      <button class="btn small" type="submit">Save</button>
+    </form>
   </section>
 
   <!-- Per-prayer azan files -->

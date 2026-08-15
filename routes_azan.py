@@ -461,6 +461,9 @@ def settings():
                 bt_sink = request.form.get("bluetooth_sink", "")
                 cfg["bluetooth_sink"] = bt_sink
 
+            elif form_id == "mosque_import":
+                cfg["mosque_import_enabled"] = request.form.get("mosque_import_enabled") == "on"
+
             elif form_id == "location":
                 try:
                     cfg["lat"] = float(request.form.get("lat", 0))

@@ -12,25 +12,53 @@
     </div>
     {% if month_rows %}
       <div class="table-wrap" style="margin-top:12px">
-        <table class="table">
+        <table class="ptt">
           <thead>
-            <tr>
-              <th>Day</th>
-              <th>Hijri</th>
-              {% for p in prayers %}<th>{{ p }}</th>{% endfor %}
+            <tr class="ptt-group">
+              <th rowspan="2">Date</th>
+              <th colspan="2">Fajr</th>
+              <th rowspan="2">Sunrise</th>
+              <th colspan="2">Dhuhr</th>
+              <th colspan="2">Asr</th>
+              <th rowspan="2">Maghrib</th>
+              <th colspan="2">Isha</th>
+            </tr>
+            <tr class="ptt-sub">
+              <th title="Prayer time begins">Begins</th>
+              <th title="Jama'ah congregation">Jamaat</th>
+              <th title="Prayer time begins">Begins</th>
+              <th title="Jama'ah congregation">Jamaat</th>
+              <th title="Prayer time begins">Begins</th>
+              <th title="Jama'ah congregation">Jamaat</th>
+              <th title="Prayer time begins">Begins</th>
+              <th title="Jama'ah congregation">Jamaat</th>
             </tr>
           </thead>
           <tbody>
             {% for entry in month_rows %}
-              <tr>
-                <td>{{ entry.day }}</td>
-                <td class="muted">{{ entry.hijri }}</td>
-                {% for p in prayers %}<td>{{ entry.row.get(p, '') }}</td>{% endfor %}
+              <tr class="{{ 'ptt-friday' if entry.is_friday else '' }}">
+                <td class="ptt-date">
+                  {{ '%02d'|format(entry.day) }} {{ entry.weekday }}
+                  <div class="muted ptt-hijri">{{ entry.hijri }}</div>
+                </td>
+                <td>{{ entry.row.get('Fajr', '') }}</td>
+                <td class="ptt-jamaat">{{ entry.row.get('Iqama_Fajr', '') }}</td>
+                <td>{{ entry.row.get('Sunrise', '') }}</td>
+                <td>{{ entry.row.get('Dhuhr', '') }}</td>
+                <td class="ptt-jamaat">
+                  {{ entry.row.get('Iqama_Dhuhr', '') }}{% if entry.row.get('Jumma_Iqama2') %} / {{ entry.row.get('Jumma_Iqama2') }}{% endif %}
+                </td>
+                <td>{{ entry.row.get('Asr', '') }}</td>
+                <td class="ptt-jamaat">{{ entry.row.get('Iqama_Asr', '') }}</td>
+                <td>{{ entry.row.get('Maghrib', '') }}</td>
+                <td>{{ entry.row.get('Isha', '') }}</td>
+                <td class="ptt-jamaat">{{ entry.row.get('Iqama_Isha', '') }}</td>
               </tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
+      <p class="muted" style="margin-top:8px">Friday rows show both Jumu'ah slots when your mosque publishes two.</p>
     {% else %}
       <p class="muted">No timetable data for this month.</p>
     {% endif %}
@@ -40,8 +68,14 @@
 {% block body_extra %}
 <style>
   .table-wrap { overflow-x: auto; }
-  .table { width: 100%; border-collapse: collapse; }
-  .table th, .table td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; white-space: nowrap; }
-  .table thead th { background: var(--bg); font-weight: 700; }
+  .ptt { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .ptt th, .ptt td { border: 1px solid var(--border); padding: 7px 8px; text-align: center; white-space: nowrap; }
+  .ptt thead .ptt-group th { background: var(--primary); color: #fff; font-weight: 700; }
+  .ptt thead .ptt-sub th { background: rgba(11, 110, 79, 0.12); color: var(--primary); font-weight: 600; font-size: 11px; }
+  .ptt-date { text-align: left; font-weight: 700; }
+  .ptt-hijri { font-size: 10px; font-weight: 400; white-space: nowrap; }
+  .ptt-jamaat { color: var(--gold); font-weight: 700; }
+  .ptt tbody tr:nth-child(even) { background: var(--bg); }
+  .ptt tbody tr.ptt-friday { background: rgba(201, 162, 39, 0.12); }
 </style>
 {% endblock %}
