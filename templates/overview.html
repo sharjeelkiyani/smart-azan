@@ -17,7 +17,7 @@
 
   <div class="dash-grid">
     <section class="card">
-      <h2><span class="icon-badge green">🕌</span> Next Prayer</h2>
+      <h2><span class="icon-badge green">{% include "icons/mosque.svg" %}</span> Next Prayer</h2>
       <div class="row" style="justify-content:space-between;align-items:center">
         <div>
           <div class="next-prayer-name">{{ next_prayer or '—' }}</div>
@@ -40,7 +40,7 @@
     </section>
 
     <section class="card">
-      <h2><span class="icon-badge blue">📅</span> Today's Prayer Times</h2>
+      <h2><span class="icon-badge blue">{% include "icons/calendar.svg" %}</span> Today's Prayer Times</h2>
       <div class="list">
         {% for t in today_times %}
           <div class="row" style="justify-content:space-between">
@@ -54,7 +54,7 @@
     </section>
 
     <section class="card">
-      <h2><span class="icon-badge cyan">📍</span> Location &amp; Weather</h2>
+      <h2><span class="icon-badge cyan">{% include "icons/map-pin.svg" %}</span> Location &amp; Weather</h2>
       {% if weather %}
         <div class="weather-temp">{{ weather.temperature_c }}°C</div>
         <div class="muted">{{ weather.condition }}</div>
@@ -71,7 +71,7 @@
     </section>
 
     <section class="card">
-      <h2><span class="icon-badge blue">🔊</span> Azan Status</h2>
+      <h2><span class="icon-badge blue">{% include "icons/volume.svg" %}</span> Azan Status</h2>
       <div class="row" style="gap:8px">
         <span class="pill" style="background:rgba(52,211,153,.15);color:var(--success)">✓ System is Active</span>
       </div>
@@ -89,7 +89,7 @@
     </section>
 
     <section class="card">
-      <h2><span class="icon-badge amber">⚡</span> Quick Controls</h2>
+      <h2><span class="icon-badge amber">{% include "icons/zap.svg" %}</span> Quick Controls</h2>
       <div class="quick-grid">
         <button class="btn ghost" type="button" onclick="quickVolume(0)">🔇<br>Mute All</button>
         <form method="post" action="{{ url_for('azan.manual_play_azan') }}">
@@ -105,7 +105,7 @@
     </section>
 
     <section class="card jumma-card">
-      <h2><span class="icon-badge purple">🕌</span> Jumma Settings</h2>
+      <h2><span class="icon-badge purple">{% include "icons/moon.svg" %}</span> Jumma Settings</h2>
       <form method="post" action="{{ url_for('azan.settings') }}">
         <input type="hidden" name="form_id" value="jumma">
         <div class="row" style="justify-content:space-between">
@@ -127,7 +127,7 @@
     </section>
 
     <section class="card">
-      <h2><span class="icon-badge orange">🔔</span> Notifications</h2>
+      <h2><span class="icon-badge orange">{% include "icons/bell.svg" %}</span> Notifications</h2>
       <p class="muted">
         {{ 'Enabled' if cfg.get('notifications_enabled') else 'Disabled' }} ·
         Reminder {{ cfg.get('reminder_minutes_before_azan', 10) }} min before azan.
@@ -184,8 +184,14 @@
 
   .dash-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    grid-template-columns: 1fr;
     gap: 16px;
+  }
+  @media (min-width: 700px) {
+    .dash-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (min-width: 1100px) {
+    .dash-grid { grid-template-columns: repeat(3, 1fr); }
   }
   .icon-badge {
     display: inline-flex;
@@ -198,12 +204,13 @@
     margin-right: 4px;
     vertical-align: middle;
   }
-  .icon-badge.green  { background: rgba(34, 197, 94, .18); }
-  .icon-badge.blue   { background: rgba(59, 130, 246, .18); }
-  .icon-badge.cyan   { background: rgba(34, 211, 238, .18); }
-  .icon-badge.amber  { background: rgba(245, 158, 11, .18); }
-  .icon-badge.purple { background: rgba(168, 85, 247, .18); }
-  .icon-badge.orange { background: rgba(251, 146, 60, .18); }
+  .icon-badge.green  { background: rgba(34, 197, 94, .18); color: #22c55e; }
+  .icon-badge.blue   { background: rgba(59, 130, 246, .18); color: #3b82f6; }
+  .icon-badge.cyan   { background: rgba(34, 211, 238, .18); color: #22d3ee; }
+  .icon-badge.amber  { background: rgba(245, 158, 11, .18); color: #f59e0b; }
+  .icon-badge.purple { background: rgba(168, 85, 247, .18); color: #a855f7; }
+  .icon-badge.orange { background: rgba(251, 146, 60, .18); color: #fb923c; }
+  .icon-badge svg { display: block; }
 
   .jumma-card { position: relative; overflow: hidden; }
   .jumma-card::after {
