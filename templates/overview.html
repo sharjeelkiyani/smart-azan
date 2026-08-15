@@ -104,7 +104,7 @@
       <div class="muted" id="quick-hint" style="margin-top:8px"></div>
     </section>
 
-    <section class="card">
+    <section class="card jumma-card">
       <h2><span class="icon-badge purple">🕌</span> Jumma Settings</h2>
       <form method="post" action="{{ url_for('azan.settings') }}">
         <input type="hidden" name="form_id" value="jumma">
@@ -204,6 +204,22 @@
   .icon-badge.amber  { background: rgba(245, 158, 11, .18); }
   .icon-badge.purple { background: rgba(168, 85, 247, .18); }
   .icon-badge.orange { background: rgba(251, 146, 60, .18); }
+
+  .jumma-card { position: relative; overflow: hidden; }
+  .jumma-card::after {
+    content: "";
+    position: absolute;
+    right: -16px;
+    bottom: -18px;
+    width: 170px;
+    height: 105px;
+    background-color: rgba(168, 85, 247, 0.4);
+    -webkit-mask: url('/static/img/mosque-skyline.svg') center bottom / cover no-repeat;
+    mask: url('/static/img/mosque-skyline.svg') center bottom / cover no-repeat;
+    -webkit-mask-position: center 30%;
+    mask-position: center 30%;
+    pointer-events: none;
+  }
 
   .next-prayer-name { font-size: 22px; font-weight: 800; color: var(--primary); }
   .countdown { font-size: 30px; font-weight: 800; margin-top: 4px; }
