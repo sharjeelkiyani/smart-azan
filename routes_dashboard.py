@@ -206,18 +206,33 @@ def time_sync_status():
 def integrations_page():
     if request.method == "POST":
         cfg = _cfg()
-        cfg["snapcast_enabled"] = request.form.get("snapcast_enabled") == "on"
-        cfg["snapcast_fifo"] = (request.form.get("snapcast_fifo") or "").strip()
-        cfg["snapcast_jsonrpc"] = (request.form.get("snapcast_jsonrpc") or "").strip()
-        try:
-            cfg["snapcast_duck_to"] = int(request.form.get("snapcast_duck_to", 35))
-            cfg["snapcast_restore_to"] = int(request.form.get("snapcast_restore_to", 80))
-        except (TypeError, ValueError):
-            pass
-        try:
-            cfg["snapcast_restore_delay_s"] = max(0.0, float(request.form.get("snapcast_restore_delay_s", 2.5)))
-        except (TypeError, ValueError):
-            pass
+        # form_id tells us which of the two forms on this page was actually
+        # submitted - without it, submitting one form would blank out the
+        # other's checkboxes (an unchecked/absent checkbox just doesn't
+        # appear in the POST body at all), silently disabling it.
+        form_id = request.form.get("form_id", "snapcast")
+
+        if form_id == "snapcast":
+            cfg["snapcast_enabled"] = request.form.get("snapcast_enabled") == "on"
+            cfg["snapcast_fifo"] = (request.form.get("snapcast_fifo") or "").strip()
+            cfg["snapcast_jsonrpc"] = (request.form.get("snapcast_jsonrpc") or "").strip()
+            try:
+                cfg["snapcast_duck_to"] = int(request.form.get("snapcast_duck_to", 35))
+                cfg["snapcast_restore_to"] = int(request.form.get("snapcast_restore_to", 80))
+            except (TypeError, ValueError):
+                pass
+            try:
+                cfg["snapcast_restore_delay_s"] = max(0.0, float(request.form.get("snapcast_restore_delay_s", 2.5)))
+            except (TypeError, ValueError):
+                pass
+
+        elif form_id == "fire_tv":
+            cfg["tv_display_enabled"] = request.form.get("tv_display_enabled") == "on"
+            cfg["fully_kiosk_url"] = (request.form.get("fully_kiosk_url") or "").strip()
+            new_pw = request.form.get("fully_kiosk_password") or ""
+            if new_pw:
+                cfg["fully_kiosk_password"] = new_pw
+
         _save(cfg)
         flash("Integration settings saved.", "success")
         return redirect(url_for("dashboard.integrations_page"))

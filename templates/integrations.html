@@ -10,6 +10,7 @@
       through Snapcast itself - that would need Snapcast installed and configured separately.
     </p>
     <form method="post">
+      <input type="hidden" name="form_id" value="snapcast">
       <label class="row" style="justify-content:space-between">
         <span>Enable Snapcast integration</span>
         <input type="checkbox" name="snapcast_enabled" {{ 'checked' if cfg.get('snapcast_enabled') }}>
@@ -38,6 +39,44 @@
         adds on top. If you can still hear the volume jump up near the very end of a
         dua/azan, increase this.
       </p>
+      <button class="btn primary" type="submit" style="margin-top:14px">Save</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>📺 Fire TV Display (Fully Kiosk Browser)</h2>
+    <p class="muted">
+      At each azan, wakes your Fire TV, switches it away from whatever's currently showing, and
+      loads a full-screen prayer-times display with the azan playing - using
+      <a href="https://www.fully-kiosk.com/en/" target="_blank" rel="noopener">Fully Kiosk Browser</a>
+      sideloaded on the Fire TV with its Remote Admin enabled.
+    </p>
+    <ol class="muted" style="padding-left:20px; line-height:1.7">
+      <li>In Fully Kiosk's settings on the Fire TV: enable <strong>Remote Administration</strong>,
+        set a password, and note the IP address/port it shows (default port <code>2323</code>).</li>
+      <li>Also enable <strong>Autoplay of Videos/Audio</strong> in Fully Kiosk's Web Content settings,
+        so the azan actually plays without needing a tap.</li>
+      <li>Since this app's address is <code>https://</code> with a self-signed certificate, also enable
+        <strong>Ignore SSL Errors</strong> in Fully Kiosk, or the display page may fail to load.</li>
+      <li>Enter that address below and save.</li>
+    </ol>
+    <form method="post">
+      <input type="hidden" name="form_id" value="fire_tv">
+      <label class="row" style="justify-content:space-between">
+        <span>Enable Fire TV display</span>
+        <input type="checkbox" name="tv_display_enabled" {{ 'checked' if cfg.get('tv_display_enabled') }}>
+      </label>
+      <div class="row" style="margin-top:10px">
+        <label class="muted" style="min-width:140px">Fully Kiosk address</label>
+        <input class="input" type="text" name="fully_kiosk_url"
+               placeholder="http://192.168.1.60:2323"
+               value="{{ cfg.get('fully_kiosk_url', '') }}">
+      </div>
+      <div class="row" style="margin-top:10px">
+        <label class="muted" style="min-width:140px">Remote Admin password</label>
+        <input class="input" type="password" name="fully_kiosk_password"
+               placeholder="Leave blank to keep current password">
+      </div>
       <button class="btn primary" type="submit" style="margin-top:14px">Save</button>
     </form>
   </section>

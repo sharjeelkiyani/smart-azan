@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Smart Azan · TV Display</title>
+  <style>
+    :root {
+      --bg: #061625; --card: #0b2234; --border: rgba(105,177,219,.20);
+      --text: #f5f8fb; --muted: #9fb2c2; --primary: #22c55e; --gold: #f7ab35;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0; height: 100%;
+      background: var(--bg); color: var(--text);
+      font-family: system-ui, Arial, sans-serif;
+      overflow: hidden;
+    }
+    .wrap {
+      height: 100vh; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 3vh;
+      padding: 4vh;
+    }
+    .clock { font-size: 12vw; font-weight: 850; line-height: 1; letter-spacing: -2px; }
+    .date-row { font-size: 2.4vw; color: var(--muted); text-align: center; }
+    .hijri { color: var(--gold); font-weight: 700; }
+    .next-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 24px; padding: 3vh 6vw; text-align: center;
+    }
+    .next-label { font-size: 2vw; color: var(--muted); text-transform: uppercase; letter-spacing: 2px; }
+    .next-name { font-size: 6vw; font-weight: 800; margin-top: 1vh; }
+    .countdown {
+      font-size: 5vw; font-weight: 850; color: var(--primary);
+      margin-top: 1vh; font-variant-numeric: tabular-nums;
+    }
+    .times-row {
+      display: flex; gap: 3vw; margin-top: 2vh;
+    }
+    .times-row div {
+      text-align: center; padding: 1.5vh 2vw; border-radius: 14px;
+    }
+    .times-row div.active { background: rgba(34,197,94,.18); }
+    .times-row .pname { font-size: 1.6vw; color: var(--muted); }
+    .times-row .ptime { font-size: 2.2vw; font-weight: 700; margin-top: .5vh; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="clock" id="clock">--:--</div>
+    <div class="date-row">
+      <div id="date">—</div>
+    </div>
+
+    <div class="next-card">
+      <div class="next-label">Next Prayer</div>
+      <div class="next-name">{{ next_prayer or '—' }}</div>
+      <div class="countdown" id="countdown">--:--:--</div>
+      <div class="times-row">
+        {% for t in today_times %}
+          <div class="{{ 'active' if t.name == next_prayer else '' }}">
+            <div class="pname">{{ t.name }}</div>
+            <div class="ptime">{{ t.time }}</div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  {% if play_file %}
+    <audio autoplay src="{{ url_for('serve_audio_file', filename=play_file) }}"></audio>
+  {% endif %}
+
+  <script>
+    function tick() {
+      const now = new Date();
+      document.getElementById('clock').textContent =
+        now.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+      document.getElementById('date').textContent =
+        now.toLocaleDateString([], {weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'});
+    }
+    tick();
+    setInterval(tick, 1000 * 10);
+
+    const nextIso = {{ next_prayer_iso|tojson }};
+    function updateCountdown() {
+      const el = document.getElementById('countdown');
+      if (!nextIso) { el.textContent = '—'; return; }
+      const diff = Math.max(0, new Date(nextIso) - new Date());
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      el.textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    }
+    updateCountdown();
+    setInterval(updateCountdown, 1000);
+
+    // This page is only re-fetched from the server when Fully Kiosk's
+    // loadUrl fires again (at the next scheduled azan) - reload periodically
+    // so the displayed date/next-prayer/countdown baseline stays correct
+    // even across a long idle stretch between prayers (e.g. day rollover).
+    setTimeout(() => location.reload(), 5 * 60 * 1000);
+  </script>
+</body>
+</html>

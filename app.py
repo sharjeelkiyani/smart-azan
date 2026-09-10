@@ -7,7 +7,7 @@ import threading
 import time
 from datetime import datetime, timedelta
 
-from flask import Flask, render_template
+from flask import Flask, render_template, request, send_from_directory
 
 # local modules
 import wifi
@@ -19,6 +19,7 @@ import audio_player
 import history_log
 import islamic_utils
 import quran_player
+import fire_tv
 
 # ----------------- constants -----------------
 AUDIO_FOLDER = "audio"
@@ -76,6 +77,9 @@ def load_config():
             "reminder_minutes_before_azan": 10,
             "mosque_import_enabled": False,
             "mosque_import_source": "aisha_masjid",
+            "tv_display_enabled": False,
+            "fully_kiosk_url": "",
+            "fully_kiosk_password": "",
         }
         save_config(cfg)
         return cfg
@@ -107,6 +111,9 @@ def load_config():
     cfg.setdefault("reminder_minutes_before_azan", 10)
     cfg.setdefault("mosque_import_enabled", False)
     cfg.setdefault("mosque_import_source", "aisha_masjid")
+    cfg.setdefault("tv_display_enabled", False)
+    cfg.setdefault("fully_kiosk_url", "")
+    cfg.setdefault("fully_kiosk_password", "")
 
     save_config(cfg)
     return cfg
@@ -260,6 +267,7 @@ def play_audio(filename, event_type="manual", label=None):
     path = os.path.join(AUDIO_FOLDER, filename)
     with config_lock:
         cfg_now = load_config()
+    fire_tv.notify_display(cfg_now, audio_filename=filename)
     ok = audio_player.play(path, cfg_now)
     history_log.log_event(event_type, label or event_type, filename, ok)
     return ok
@@ -553,6 +561,33 @@ def index():
         current_date=today_str,
         now=now,
     )
+
+
+# ----------------- Fire TV / Fully Kiosk display -----------------
+@app.route("/tv-display")
+def tv_display():
+    """Large-screen page for a Fire TV running Fully Kiosk Browser - see
+    fire_tv.py. Not linked from the app's own nav; it's meant to be loaded
+    remotely by Fully Kiosk's `loadUrl` command, optionally with ?play=
+    naming an audio file (in AUDIO_FOLDER) to autoplay immediately."""
+    now = datetime.now()
+    next_prayer, next_prayer_dt, today_times, _today_row, prev_prayer_dt = _compute_next_prayer(now)
+    play_file = request.args.get("play") or None
+    return render_template(
+        "tv_display.html",
+        today_times=today_times,
+        next_prayer=next_prayer,
+        next_prayer_iso=next_prayer_dt.isoformat() if next_prayer_dt else None,
+        prev_prayer_iso=prev_prayer_dt.isoformat() if prev_prayer_dt else None,
+        play_file=play_file,
+    )
+
+
+@app.route("/audio_file/<path:filename>")
+def serve_audio_file(filename):
+    """Raw audio bytes for the TV display's <audio> tag - send_from_directory
+    already guards against path traversal (e.g. ../../etc/passwd)."""
+    return send_from_directory(AUDIO_FOLDER, filename)
 
 
 # Scheduler needs to run whether this module is launched directly (python
