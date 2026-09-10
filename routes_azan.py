@@ -26,6 +26,7 @@ _save_config = None
 _AUDIO_FOLDER = None
 _TIMETABLE_FILE = None
 _STATIC_FOLDER = None
+_play_audio_fn = None
 
 # ----------------- helpers -----------------
 
@@ -61,6 +62,14 @@ def _ensure_audio_folder():
 
 
 def _play_audio(filename: str, event_type: str = "manual", label: str = None):
+    # Prefer app.py's play_audio() if it was injected via init() - that's the
+    # one that also notifies the Fire TV display (see fire_tv.py) and bumps
+    # /tv_status's play_id. This local fallback (used only if init() was
+    # ever called without play_audio_fn) plays the same audio but silently
+    # skips the Fire TV entirely, which is exactly the bug that made "Test
+    # Azan" work on the Bluetooth speaker but never show up on the TV.
+    if _play_audio_fn is not None:
+        return _play_audio_fn(filename, event_type, label)
     _ensure_audio_folder()
     path = os.path.join(_AUDIO_FOLDER, filename)
     with _config_lock:
@@ -139,9 +148,10 @@ def init(app,
          save_config,
          audio_folder="audio",
          timetable_file="timetable.csv",
-         static_folder="static"):
+         static_folder="static",
+         play_audio_fn=None):
     global _config_lock, _load_config, _save_config
-    global _AUDIO_FOLDER, _TIMETABLE_FILE, _STATIC_FOLDER
+    global _AUDIO_FOLDER, _TIMETABLE_FILE, _STATIC_FOLDER, _play_audio_fn
 
     _config_lock = config_lock
     _load_config = load_config
@@ -149,6 +159,7 @@ def init(app,
     _AUDIO_FOLDER = audio_folder
     _TIMETABLE_FILE = timetable_file
     _STATIC_FOLDER = static_folder
+    _play_audio_fn = play_audio_fn
     _ensure_audio_folder()
 
     # register once

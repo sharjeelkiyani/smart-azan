@@ -89,7 +89,7 @@ class MainActivity : Activity() {
 
     private fun promptForUrl() {
         val input = EditText(this)
-        input.hint = "https://192.168.1.42:5050"
+        input.hint = "http://192.168.1.42:5051"
         input.setSingleLine(true)
         // A remote-control on-screen keyboard behaves much better with a
         // single-line, URL-flavoured field: it puts "/" and "." within
@@ -115,9 +115,10 @@ class MainActivity : Activity() {
         }
 
         setupDialog = AlertDialog.Builder(this)
-            .setTitle("Smart Azan server address")
+            .setTitle("Smart Azan TV display address")
             .setMessage(
-                "Enter the address shown when you open Smart Azan in a browser, " +
+                "Enter the TV display address shown on the Integrations page in Smart Azan " +
+                    "(not the https:// address you use in a browser - this is a separate one), " +
                     "then press Done on the keyboard to save."
             )
             .setView(input)

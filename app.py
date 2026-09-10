@@ -80,6 +80,7 @@ def load_config():
             "tv_display_enabled": False,
             "fully_kiosk_url": "",
             "fully_kiosk_password": "",
+            "tv_http_port": 5051,
         }
         save_config(cfg)
         return cfg
@@ -114,6 +115,7 @@ def load_config():
     cfg.setdefault("tv_display_enabled", False)
     cfg.setdefault("fully_kiosk_url", "")
     cfg.setdefault("fully_kiosk_password", "")
+    cfg.setdefault("tv_http_port", 5051)
 
     save_config(cfg)
     return cfg
@@ -155,6 +157,15 @@ except TypeError:
 bluetooth.init(app, config_lock, load_config, save_config)
 
 # routes_azan: same pattern – if your file takes fewer args, we fall back
+#
+# play_audio_fn is a lambda (not the play_audio function itself) because
+# play_audio() is defined further down in this file - the lambda body isn't
+# evaluated until routes_azan actually calls it (on a real HTTP request,
+# long after this module has finished loading), so the forward reference is
+# safe. Without this, routes_azan.py's manual-test routes (like "Test Azan")
+# fell back to a local, separate play-audio implementation that plays the
+# audio correctly but never notifies the Fire TV display - it played on the
+# Bluetooth speaker but never showed up on the TV.
 try:
     routes_azan.init(
         app,
@@ -164,6 +175,7 @@ try:
         audio_folder=AUDIO_FOLDER,
         timetable_file=TIMETABLE_FILE,
         static_folder="static",
+        play_audio_fn=lambda filename, event_type="manual", label=None: play_audio(filename, event_type, label),
     )
 except TypeError:
     routes_azan.init(app, config_lock, load_config, save_config)
@@ -611,6 +623,44 @@ def serve_audio_file(filename):
     """Raw audio bytes for the TV display's <audio> tag - send_from_directory
     already guards against path traversal (e.g. ../../etc/passwd)."""
     return send_from_directory(AUDIO_FOLDER, filename)
+
+
+# ----------------- plain-HTTP mirror, TV routes only -----------------
+# Android WebView's fetch()/XHR calls don't honor WebViewClient's
+# onReceivedSslError override the way page navigation does - the main
+# /tv-display page itself loads fine over the site's self-signed HTTPS, but
+# its JS polling of /tv_status silently fails its TLS handshake instead of
+# ever reaching the server, so a scheduled azan would play on the main
+# speaker but never show up on the TV. The TV display never actually needs
+# HTTPS (that's only required elsewhere for the browser Geolocation API),
+# so it's mirrored here on a separate plain-HTTP port instead of requiring
+# every TV/Fire TV device to trust a certificate. Only these three routes
+# are exposed this way - everything else (settings, Wi-Fi, uploads, etc.)
+# stays HTTPS-only on the main port.
+tv_http_app = Flask(__name__ + ".tv_http")
+tv_http_app.add_url_rule("/tv-display", view_func=tv_display)
+tv_http_app.add_url_rule("/tv_status", view_func=tv_status)
+tv_http_app.add_url_rule("/audio_file/<path:filename>", view_func=serve_audio_file)
+
+
+def _run_tv_http_mirror():
+    from wsgiref.simple_server import make_server, WSGIRequestHandler
+
+    class _QuietHandler(WSGIRequestHandler):
+        def log_message(self, *args):
+            pass  # this gets polled every few seconds - keep it quiet
+
+    with config_lock:
+        port = load_config().get("tv_http_port", 5051)
+    try:
+        httpd = make_server("0.0.0.0", port, tv_http_app, handler_class=_QuietHandler)
+        print(f"[TV] plain-HTTP mirror listening on :{port}")
+        httpd.serve_forever()
+    except Exception as e:
+        print(f"[TV] plain-HTTP mirror failed to start on :{port}: {e}")
+
+
+threading.Thread(target=_run_tv_http_mirror, daemon=True).start()
 
 
 # Scheduler needs to run whether this module is launched directly (python

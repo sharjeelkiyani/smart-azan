@@ -10,6 +10,7 @@ import audio_player
 import bluetooth
 import history_log
 import islamic_utils
+import fire_tv
 
 bp = Blueprint("dashboard", __name__)
 
@@ -238,4 +239,6 @@ def integrations_page():
         return redirect(url_for("dashboard.integrations_page"))
 
     cfg = _cfg()
-    return render_template("integrations.html", cfg=cfg)
+    tv_http_port = cfg.get("tv_http_port", 5051)
+    tv_display_url = f"http://{fire_tv._lan_ip()}:{tv_http_port}"
+    return render_template("integrations.html", cfg=cfg, tv_display_url=tv_display_url)

@@ -34,9 +34,14 @@ automatically. After this folder is pushed to GitHub:
    ```
 
 4. Launch **Smart Azan TV** from the Fire TV home screen. The first time,
-   it'll ask for your Smart Azan server's address (the same
-   `https://<pi-ip>:5050` you use in a browser) - enter it once and it's
-   saved.
+   it'll ask for the TV display address - **not** the `https://<pi-ip>:5050`
+   address you use in a browser. Find the right one on Smart Azan's
+   **Integrations** page (a separate `http://<pi-ip>:5051`-style address) -
+   this is deliberate: a TV app polling for a new azan over the main site's
+   self-signed HTTPS certificate can silently fail even though the page
+   itself loads fine, since `fetch()` calls don't get the same
+   "ignore this certificate" treatment as loading the page does. Enter it
+   once and it's saved.
 5. To change the address later, **press and hold Back** on the remote.
 
 ## Installing on an Android phone/tablet

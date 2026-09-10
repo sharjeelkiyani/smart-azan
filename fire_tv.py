@@ -59,10 +59,17 @@ def notify_display(cfg, audio_filename=None):
     if not base_url:
         return
     password = cfg.get("fully_kiosk_password") or ""
-    port = cfg.get("port", 5050)
+    # The plain-HTTP mirror (app.py's tv_http_app), not the main HTTPS port -
+    # Fully Kiosk (and any other WebView-based viewer) polling this page's
+    # /tv_status over the main site's self-signed cert can silently fail its
+    # TLS handshake even though the page itself loads fine, since fetch()/XHR
+    # doesn't go through the same "ignore SSL errors" path as navigation.
+    # Plain HTTP sidesteps that entirely - this page never needed HTTPS
+    # anyway (that's only for the Geolocation API used elsewhere).
+    port = cfg.get("tv_http_port", 5051)
 
     def _run():
-        display_url = f"https://{_lan_ip()}:{port}/tv-display"
+        display_url = f"http://{_lan_ip()}:{port}/tv-display"
         if audio_filename:
             display_url += "?play=" + urllib.parse.quote(audio_filename)
         _fk_command(base_url, password, "screenOn")

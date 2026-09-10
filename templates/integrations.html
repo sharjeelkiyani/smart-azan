@@ -44,26 +44,36 @@
   </section>
 
   <section class="card">
-    <h2>📺 Fire TV Display (Fully Kiosk Browser)</h2>
+    <h2>📺 Fire TV Display</h2>
     <p class="muted">
-      At each azan, wakes your Fire TV, switches it away from whatever's currently showing, and
-      loads a full-screen prayer-times display with the azan playing - using
-      <a href="https://www.fully-kiosk.com/en/" target="_blank" rel="noopener">Fully Kiosk Browser</a>
-      sideloaded on the Fire TV with its Remote Admin enabled.
+      Your Fire TV's display address (enter this in the <strong>Smart Azan TV</strong> app, or in
+      any other browser/kiosk app you point at the TV):
+    </p>
+    <p><code style="font-size:1.1em">{{ tv_display_url }}</code></p>
+    <p class="muted">
+      This is a separate, plain-HTTP address from the main <code>https://</code> one you use in a
+      browser - deliberately so, since a TV app polling for a new azan over a self-signed HTTPS
+      certificate can silently fail even though the page itself loads fine. No certificate warning
+      to accept, nothing else to configure - just enter the address above.
+    </p>
+
+    <h3 style="margin-top:18px">Using Fully Kiosk Browser instead</h3>
+    <p class="muted">
+      If you'd rather use <a href="https://www.fully-kiosk.com/en/" target="_blank" rel="noopener">Fully Kiosk Browser</a>
+      (a paid/ad-supported third-party app) so this app can also auto-wake the TV and switch away
+      from whatever else is showing at azan time:
     </p>
     <ol class="muted" style="padding-left:20px; line-height:1.7">
       <li>In Fully Kiosk's settings on the Fire TV: enable <strong>Remote Administration</strong>,
         set a password, and note the IP address/port it shows (default port <code>2323</code>).</li>
       <li>Also enable <strong>Autoplay of Videos/Audio</strong> in Fully Kiosk's Web Content settings,
         so the azan actually plays without needing a tap.</li>
-      <li>Since this app's address is <code>https://</code> with a self-signed certificate, also enable
-        <strong>Ignore SSL Errors</strong> in Fully Kiosk, or the display page may fail to load.</li>
-      <li>Enter that address below and save.</li>
+      <li>Enter that Fully Kiosk address below and save.</li>
     </ol>
     <form method="post">
       <input type="hidden" name="form_id" value="fire_tv">
       <label class="row" style="justify-content:space-between">
-        <span>Enable Fire TV display</span>
+        <span>Enable Fully Kiosk auto-wake</span>
         <input type="checkbox" name="tv_display_enabled" {{ 'checked' if cfg.get('tv_display_enabled') }}>
       </label>
       <div class="row" style="margin-top:10px">
