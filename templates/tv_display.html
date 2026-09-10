@@ -6,64 +6,225 @@
   <title>Smart Azan · TV Display</title>
   <style>
     :root {
-      --bg: #061625; --card: #0b2234; --border: rgba(105,177,219,.20);
-      --text: #f5f8fb; --muted: #9fb2c2; --primary: #22c55e; --gold: #f7ab35;
+      --dash-bg: #061625; --dash-card: #0b2234; --dash-border: rgba(105,177,219,.20);
+      --dash-text: #f5f8fb; --dash-muted: #9fb2c2; --dash-green: #45d483; --success: #45d483;
     }
     * { box-sizing: border-box; }
     html, body {
       margin: 0; padding: 0; height: 100%;
-      background: var(--bg); color: var(--text);
+      background: var(--dash-bg); color: var(--dash-text);
       font-family: system-ui, Arial, sans-serif;
       overflow: hidden;
     }
+    .muted { color: var(--dash-muted); }
+
     .wrap {
-      height: 100vh; display: flex; flex-direction: column;
-      align-items: center; justify-content: center; gap: 3vh;
-      padding: 4vh;
+      height: 100vh; width: 100vw;
+      display: flex; flex-direction: column;
+      padding: 2.2vh 2.2vw; gap: 1.6vh;
     }
-    .clock { font-size: 12vw; font-weight: 850; line-height: 1; letter-spacing: -2px; }
-    .date-row { font-size: 2.4vw; color: var(--muted); text-align: center; }
-    .hijri { color: var(--gold); font-weight: 700; }
-    .next-card {
-      background: var(--card); border: 1px solid var(--border);
-      border-radius: 24px; padding: 3vh 6vw; text-align: center;
+
+    /* ---------- HERO ---------- */
+    .hero-card {
+      flex: 0 0 auto;
+      min-height: 20vh;
+      padding: 2.4vh 2.4vw;
+      position: relative;
+      overflow: hidden;
+      border-radius: 1.4vw;
+      border: 1px solid var(--dash-border);
+      color: #fff;
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(240px, .75fr);
+      gap: 2vw;
+      align-items: center;
+      background:
+        linear-gradient(90deg, rgba(5,22,38,.88) 0%, rgba(7,25,43,.55) 45%, rgba(5,22,38,.76) 100%),
+        url('/static/img/mosque-skyline.svg') center 64% / cover no-repeat,
+        radial-gradient(circle at 58% 18%, #183c64 0%, #0c2238 55%, #071624 100%);
     }
-    .next-label { font-size: 2vw; color: var(--muted); text-transform: uppercase; letter-spacing: 2px; }
-    .next-name { font-size: 6vw; font-weight: 800; margin-top: 1vh; }
+    .hero-card::before {
+      content: ""; position: absolute; inset: 0; pointer-events: none;
+      background:
+        radial-gradient(circle at 40% 15%, rgba(255,255,255,.15) 0 1px, transparent 2px),
+        radial-gradient(circle at 72% 20%, rgba(255,255,255,.13) 0 1px, transparent 2px),
+        radial-gradient(circle at 84% 12%, rgba(255,255,255,.12) 0 1px, transparent 2px);
+      opacity: .7;
+    }
+    .hero-text, .verse-card { position: relative; z-index: 1; }
+    .hero-greeting { font-size: 1.5vw; font-weight: 600; color: rgba(255,255,255,.92); }
+    .hero-title { margin-top: .6vh; font-size: 3.6vw; line-height: 1; font-weight: 850; letter-spacing: -.1vw; }
+    .hero-title .accent { color: var(--dash-green); }
+    .hero-tagline { margin-top: 1.4vh; font-size: 1.3vw; line-height: 1.5; color: rgba(238,245,250,.83); }
+
+    .verse-card {
+      justify-self: end; width: 100%;
+      padding: 1.8vh 1.6vw; border-radius: 1vw;
+      border: 1px solid rgba(107,186,228,.22);
+      background: rgba(5,24,41,.76);
+      backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px);
+    }
+    .verse-ref { color: var(--dash-green); font-size: 1.15vw; font-weight: 800; margin-bottom: .8vh; }
+    .verse-text { min-height: 6vh; font-size: 1.05vw; line-height: 1.55; color: #eaf0f5; }
+    .verse-dots { display: flex; justify-content: center; gap: 6px; margin-top: 1.2vh; }
+    .verse-dot { width: 7px; height: 7px; border-radius: 50%; background: #405466; }
+    .verse-dot.active { background: var(--dash-green); }
+
+    /* ---------- TOP ROW ---------- */
+    .row {
+      flex: 1 1 auto; min-height: 0;
+      display: grid; grid-template-columns: 1.04fr 1.08fr 1.08fr; gap: 1.6vw;
+    }
+    .card {
+      min-width: 0; min-height: 0;
+      border-radius: 1.2vw; border: 1px solid var(--dash-border);
+      background: linear-gradient(145deg, rgba(11,38,58,.98), rgba(8,27,43,.98));
+      box-shadow: 0 10px 28px rgba(0,0,0,.12);
+      padding: 2vh 1.6vw;
+      display: flex; flex-direction: column;
+    }
+    .card h2 {
+      display: flex; align-items: center; gap: .6vw;
+      margin: 0 0 1.6vh; color: #f4f8fb; font-size: 1.3vw; font-weight: 800;
+    }
+    .icon-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 2.2vw; height: 2.2vw; min-width: 26px; min-height: 26px;
+      border-radius: .6vw; flex: 0 0 auto;
+    }
+    .icon-badge.green  { background: rgba(34,197,94,.16); color: #4bd682; }
+    .icon-badge.blue   { background: rgba(59,130,246,.16); color: #4db8ff; }
+    .icon-badge.cyan   { background: rgba(34,211,238,.16); color: #4dd9ee; }
+    .icon-badge svg { width: 55%; height: 55%; display: block; }
+
+    /* ---------- NEXT PRAYER ---------- */
+    .next-prayer-layout {
+      flex: 1; display: grid; grid-template-columns: minmax(0,1fr) auto;
+      gap: 1vw; align-items: center;
+    }
+    .next-prayer-name { color: #f7fbff; font-size: 2.6vw; font-weight: 800; letter-spacing: -.05vw; }
     .countdown {
-      font-size: 5vw; font-weight: 850; color: var(--primary);
-      margin-top: 1vh; font-variant-numeric: tabular-nums;
+      margin-top: .6vh; color: var(--dash-green); font-size: 2.6vw;
+      font-weight: 850; letter-spacing: .02vw; font-variant-numeric: tabular-nums;
     }
-    .times-row {
-      display: flex; gap: 3vw; margin-top: 2vh;
+    .next-prayer-meta { margin-top: 1.2vh; color: #e1e8ee; font-size: 1.05vw; }
+    .meta-dot { color: var(--dash-green); padding: 0 4px; }
+    .ring-wrap { width: 9vw; height: 9vw; min-width: 90px; min-height: 90px; position: relative; display: grid; place-items: center; justify-self: end; }
+    .prayer-ring { width: 100%; height: 100%; display: block; }
+    .ring-icon { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); font-size: 3vw; }
+    .auto-athan-note {
+      margin-top: 1.4vh; padding: 1.2vh 1vw; border-radius: .8vw;
+      border: 1px solid rgba(109,178,219,.08); background: rgba(12,39,59,.72);
+      color: #dce8f0; font-size: .95vw;
     }
-    .times-row div {
-      text-align: center; padding: 1.5vh 2vw; border-radius: 14px;
+
+    /* ---------- PRAYER TIMES ---------- */
+    .prayer-list { flex: 1; display: flex; flex-direction: column; justify-content: space-evenly; }
+    .prayer-time-row {
+      padding: .8vh .8vw; display: flex; justify-content: space-between; align-items: center;
+      border-bottom: 1px solid rgba(255,255,255,.05); border-radius: .5vw;
+      color: #dfe7ed; font-size: 1.15vw;
     }
-    .times-row div.active { background: rgba(34,197,94,.18); }
-    .times-row .pname { font-size: 1.6vw; color: var(--muted); }
-    .times-row .ptime { font-size: 2.2vw; font-weight: 700; margin-top: .5vh; }
+    .prayer-time-row:last-child { border-bottom: 0; }
+    .prayer-time-row.active {
+      border-bottom: 0; color: #ecfff6;
+      background: linear-gradient(90deg, rgba(31,170,119,.25), rgba(31,170,119,.10));
+    }
+    .prayer-time-row.active .prayer-time-name { color: var(--dash-green); font-weight: 800; }
+
+    /* ---------- WEATHER ---------- */
+    .weather-main { flex: 1; display: flex; justify-content: space-between; align-items: center; gap: 1vw; }
+    .weather-location { color: #e9f0f5; font-size: 1.05vw; font-weight: 650; }
+    .weather-temp { margin-top: 1vh; color: #f5f8fb; font-size: 3vw; line-height: 1; font-weight: 850; }
+    .weather-condition { margin-top: .6vh; font-size: 1vw; }
+    .weather-moon { font-size: 4.2vw; filter: drop-shadow(0 8px 15px rgba(0,0,0,.15)); }
+    .weather-stats { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: .6vw; margin-top: 1.2vh; }
+    .weather-stat {
+      min-width: 0; padding: .8vh .6vw; border-radius: .7vw;
+      border: 1px solid rgba(255,255,255,.05); background: rgba(18,50,74,.68);
+    }
+    .weather-stat span { display: block; font-size: .8vw; white-space: nowrap; }
+    .weather-stat strong { display: block; margin-top: .4vh; color: #f7fbff; font-size: 1.05vw; white-space: nowrap; }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="clock" id="clock">--:--</div>
-    <div class="date-row">
-      <div id="date">—</div>
-    </div>
-
-    <div class="next-card">
-      <div class="next-label">Next Prayer</div>
-      <div class="next-name">{{ next_prayer or '—' }}</div>
-      <div class="countdown" id="countdown">--:--:--</div>
-      <div class="times-row">
-        {% for t in today_times %}
-          <div class="{{ 'active' if t.name == next_prayer else '' }}">
-            <div class="pname">{{ t.name }}</div>
-            <div class="ptime">{{ t.time }}</div>
-          </div>
-        {% endfor %}
+    <section class="hero-card">
+      <div class="hero-text">
+        <div class="hero-greeting">Assalamu Alaikum 👋</div>
+        <div class="hero-title">Smart <span class="accent">Azan</span></div>
+        <div class="hero-tagline">Never miss a prayer.<br>Stay connected with your Creator.</div>
       </div>
+      <div class="verse-card">
+        <div class="verse-ref" id="verse-ref">—</div>
+        <div class="verse-text" id="verse-text">—</div>
+        <div class="verse-dots" aria-hidden="true">
+          <span class="verse-dot active"></span>
+          <span class="verse-dot"></span>
+          <span class="verse-dot"></span>
+          <span class="verse-dot"></span>
+        </div>
+      </div>
+    </section>
+
+    <div class="row">
+      <section class="card">
+        <h2><span class="icon-badge green">{% include "icons/mosque.svg" %}</span> Next Prayer</h2>
+        <div class="next-prayer-layout">
+          <div>
+            <div class="next-prayer-name">{{ next_prayer or '—' }}</div>
+            <div class="countdown" id="countdown">--:--:--</div>
+            <div class="next-prayer-meta">
+              {% if next_prayer_iso %}{{ next_prayer_iso[11:16] }} <span class="meta-dot">•</span> Today{% endif %}
+            </div>
+          </div>
+          <div class="ring-wrap">
+            <svg class="prayer-ring" viewBox="0 0 120 120" aria-hidden="true">
+              <circle cx="60" cy="60" r="50" stroke="rgba(90,168,159,.18)" stroke-width="9" fill="none" />
+              <circle id="ring-progress" cx="60" cy="60" r="50" stroke="var(--success)" stroke-width="9"
+                      fill="none" stroke-linecap="round" stroke-dasharray="314.159" stroke-dashoffset="314.159"
+                      transform="rotate(-90 60 60)" />
+            </svg>
+            <span class="ring-icon">🌙</span>
+          </div>
+        </div>
+        <div class="auto-athan-note">🔊 Athan will be played automatically</div>
+      </section>
+
+      <section class="card">
+        <h2><span class="icon-badge blue">{% include "icons/calendar.svg" %}</span> Today's Prayer Times</h2>
+        <div class="prayer-list">
+          {% for t in today_times %}
+            <div class="prayer-time-row {{ 'active' if t.name == next_prayer else '' }}">
+              <span class="prayer-time-name">{{ t.name }}</span>
+              <strong>{{ t.time }}</strong>
+            </div>
+          {% else %}
+            <p class="muted">No timetable for today.</p>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="card">
+        <h2><span class="icon-badge cyan">{% include "icons/map-pin.svg" %}</span> Location &amp; Weather</h2>
+        {% if weather %}
+          <div class="weather-main">
+            <div>
+              <div class="weather-location">{{ cfg.get('location_name', 'Current Location') }}</div>
+              <div class="weather-temp">{{ weather.temperature_c }}°C</div>
+              <div class="muted weather-condition">{{ weather.condition }}</div>
+            </div>
+            <div class="weather-moon" aria-hidden="true">🌙</div>
+          </div>
+          <div class="weather-stats">
+            <div class="weather-stat"><span class="muted">💧 Humidity</span><strong>{{ weather.humidity_pct }}%</strong></div>
+            <div class="weather-stat"><span class="muted">💨 Wind</span><strong>{{ weather.wind_kmh }} km/h</strong></div>
+            <div class="weather-stat"><span class="muted">◴ Pressure</span><strong>{{ weather.pressure_hpa }} hPa</strong></div>
+          </div>
+        {% else %}
+          <p class="muted">No location set yet - set one from Settings.</p>
+        {% endif %}
+      </section>
     </div>
   </div>
 
@@ -72,33 +233,53 @@
   {% endif %}
 
   <script>
-    function tick() {
-      const now = new Date();
-      document.getElementById('clock').textContent =
-        now.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
-      document.getElementById('date').textContent =
-        now.toLocaleDateString([], {weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'});
+    // ---------- Quran verse carousel ----------
+    const VERSES = [
+      {ref: 'Quran 2:238', text: 'Guard your prayers carefully, including the middle prayer, and stand before God in devotion.'},
+      {ref: 'Quran 29:45', text: 'Establish prayer - indeed, prayer restrains one from indecency and wrongdoing.'},
+      {ref: 'Quran 20:14', text: 'Establish prayer for My remembrance.'},
+      {ref: 'Quran 13:28', text: 'Truly, it is in the remembrance of God that hearts find peace.'},
+    ];
+    let vIdx = 0;
+    function showVerse(i) {
+      const ref = document.getElementById('verse-ref');
+      const text = document.getElementById('verse-text');
+      const dots = document.querySelectorAll('.verse-dot');
+      if (ref) ref.textContent = VERSES[i].ref;
+      if (text) text.textContent = VERSES[i].text;
+      dots.forEach((dot, index) => dot.classList.toggle('active', index === i));
     }
-    tick();
-    setInterval(tick, 1000 * 10);
+    showVerse(0);
+    setInterval(() => { vIdx = (vIdx + 1) % VERSES.length; showVerse(vIdx); }, 8000);
 
+    // ---------- Countdown ring ----------
     const nextIso = {{ next_prayer_iso|tojson }};
+    const prevIso = {{ prev_prayer_iso|tojson }};
+    const RING_CIRC = 314.159;
     function updateCountdown() {
       const el = document.getElementById('countdown');
-      if (!nextIso) { el.textContent = '—'; return; }
-      const diff = Math.max(0, new Date(nextIso) - new Date());
+      const ring = document.getElementById('ring-progress');
+      if (!el) return;
+      if (!nextIso) { el.textContent = '—'; if (ring) ring.setAttribute('stroke-dashoffset', String(RING_CIRC)); return; }
+      const now = new Date();
+      const next = new Date(nextIso);
+      const diff = Math.max(0, next - now);
       const h = Math.floor(diff / 3600000);
       const m = Math.floor((diff % 3600000) / 60000);
       const s = Math.floor((diff % 60000) / 1000);
       el.textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+      if (ring && prevIso) {
+        const prev = new Date(prevIso);
+        const total = next - prev;
+        const elapsed = now - prev;
+        const pct = total > 0 ? Math.min(1, Math.max(0, elapsed / total)) : 0;
+        ring.setAttribute('stroke-dashoffset', String(RING_CIRC * (1 - pct)));
+      }
     }
     updateCountdown();
     setInterval(updateCountdown, 1000);
 
-    // Poll for a new azan/dua rather than waiting on a remote "load this
-    // now" command - this is what lets a plain app/browser tab left open on
-    // this page (no Fully Kiosk, no REST trigger) still play azan on its
-    // own the moment the scheduler fires.
+    // ---------- Poll for a new azan/dua and autoplay it ----------
     let lastPlayId = {{ play_id|tojson }};
     async function pollNowPlaying() {
       try {
@@ -113,10 +294,10 @@
     }
     setInterval(pollNowPlaying, 5000);
 
-    // Reload periodically anyway, so the displayed date/next-prayer/
-    // countdown baseline stays correct even across a long idle stretch
-    // between prayers (e.g. day rollover) - the polling above is only for
-    // reacting quickly to a new azan, not for the slower-changing display.
+    // Reload periodically so the displayed date/next-prayer/countdown
+    // baseline stays correct even across a long idle stretch (e.g. day
+    // rollover) - the polling above is only for reacting quickly to a new
+    // azan, not for the slower-changing display.
     setTimeout(() => location.reload(), 5 * 60 * 1000);
   </script>
 </body>

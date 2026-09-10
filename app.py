@@ -597,12 +597,17 @@ def tv_display():
     play_file = request.args.get("play") or None
     with _tv_now_playing_lock:
         current_play_id = _tv_now_playing["play_id"]
+    with config_lock:
+        current_cfg = load_config()
+    weather = islamic_utils.get_weather(current_cfg.get("lat"), current_cfg.get("lon"))
     return render_template(
         "tv_display.html",
+        cfg=current_cfg,
         today_times=today_times,
         next_prayer=next_prayer,
         next_prayer_iso=next_prayer_dt.isoformat() if next_prayer_dt else None,
         prev_prayer_iso=prev_prayer_dt.isoformat() if prev_prayer_dt else None,
+        weather=weather,
         play_file=play_file,
         play_id=current_play_id,
     )
