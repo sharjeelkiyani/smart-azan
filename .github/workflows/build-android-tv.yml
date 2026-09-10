@@ -34,6 +34,28 @@ jobs:
         with:
           gradle-version: "8.7"
 
+      # Without this, every run gets a fresh CI VM with no ~/.android/debug.keystore,
+      # so Android Gradle Plugin auto-generates a NEW random one each time - meaning
+      # every build is signed differently and `adb install -r` (update in place)
+      # fails with INSTALL_FAILED_UPDATE_INCOMPATIBLE, forcing an uninstall (which
+      # also wipes the saved server address) before every single reinstall. Caching
+      # the keystore across runs keeps every build signed the same way.
+      - name: Cache debug keystore
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: android-debug-keystore-v1
+
+      - name: Generate debug keystore if not cached yet
+        run: |
+          mkdir -p ~/.android
+          if [ ! -f ~/.android/debug.keystore ]; then
+            keytool -genkey -v -keystore ~/.android/debug.keystore \
+              -storepass android -alias androiddebugkey -keypass android \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
       - name: Build debug APK
         working-directory: android-tv-app
         run: gradle assembleDebug --stacktrace
