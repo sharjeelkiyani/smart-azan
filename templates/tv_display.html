@@ -298,7 +298,14 @@
     // baseline stays correct even across a long idle stretch (e.g. day
     // rollover) - the polling above is only for reacting quickly to a new
     // azan, not for the slower-changing display.
-    setTimeout(() => location.reload(), 5 * 60 * 1000);
+    //
+    // Navigates to the bare path rather than location.reload(), which would
+    // preserve the current URL including a ?play=<file> query string (set
+    // when this page was opened specifically to autoplay one azan) - a
+    // plain reload would revisit that same URL and its <audio autoplay>
+    // tag would fire all over again, replaying an azan that had already
+    // finished if this page happened to still be on screen 5 minutes later.
+    setTimeout(() => { location.href = '/tv-display'; }, 5 * 60 * 1000);
   </script>
 </body>
 </html>
