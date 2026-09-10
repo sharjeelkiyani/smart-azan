@@ -598,14 +598,18 @@ def connect_bt_device():
 
     ok = False
 
+    # Trust up front, not just as a fallback if the first connect attempt
+    # fails: whether *this* connect succeeds or not, trust is what lets
+    # BlueZ auto-reconnect the device later on its own (e.g. after a
+    # reboot, or if it briefly drops and comes back in range) - a device
+    # left untrusted after a smooth first-try connect was a real gap here
+    # that undermined "stays connected" for exactly that reason.
+    if hasattr(bluetooth, "run_bluetoothctl_cmd"):
+        bluetooth.run_bluetoothctl_cmd(["trust", mac])
+
     # 4) try EXACTLY what you did by hand: simple connect first
     if hasattr(bluetooth, "run_bluetoothctl_cmd"):
         ok = bluetooth.run_bluetoothctl_cmd(["connect", mac])
-
-        # 5) if simple connect failed, try trust + connect
-        if not ok:
-            bluetooth.run_bluetoothctl_cmd(["trust", mac])
-            ok = bluetooth.run_bluetoothctl_cmd(["connect", mac])
 
     # 6) last resort: the heavy one (remove + pair + connect)
     if not ok and hasattr(bluetooth, "_force_pair_and_connect"):
