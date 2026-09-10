@@ -3,6 +3,13 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- Lets the background watcher draw the azan display on top of
+         whatever else is on screen (see AzanOverlayService) - this is a
+         sensitive permission Android requires the user to grant manually
+         via Settings, it can't be silently auto-granted. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <!-- Both required="false" so this same APK installs and shows up on a
          Fire TV/Android TV home screen (leanback) AND a regular phone. -->
@@ -48,6 +55,29 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
+
+        <!-- Watches for a new azan/dua even while some other app is on
+             screen, and draws it full-screen on top (needs the overlay
+             permission granted once - see MainActivity). -->
+        <service
+            android:name=".AzanOverlayService"
+            android:exported="false" />
+
+        <!-- Optional Fire TV/Android TV screensaver - shows the same
+             display during idle time. Chosen manually in
+             Settings -> Display & Sounds -> Screen Saver. Only activates
+             when the device is idle, not over actively playing content -
+             that's what AzanOverlayService is for. -->
+        <service
+            android:name=".TvDreamService"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_DREAM_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.dreams.DreamService" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </service>
 
     </application>
 </manifest>

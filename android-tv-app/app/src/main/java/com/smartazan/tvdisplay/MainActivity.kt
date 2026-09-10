@@ -2,9 +2,13 @@ package com.smartazan.tvdisplay
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.Intent
 import android.content.SharedPreferences
+import android.net.Uri
 import android.net.http.SslError
+import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.text.InputType
 import android.util.Log
 import android.view.KeyEvent
@@ -24,8 +28,22 @@ import android.widget.EditText
  * app.py's /tv_status), so this app only has to load it once and stay
  * there - no remote-control protocol needed, unlike Fully Kiosk's paid
  * Remote Admin API.
+ *
+ * Taking over the screen while some OTHER app is active (not just reacting
+ * while this app is already what's showing) is handled separately by
+ * AzanOverlayService, started below - that's a background watcher with its
+ * own permission requirements, since Android deliberately doesn't let a
+ * plain foreground app do that on its own.
  */
 class MainActivity : Activity() {
+
+    companion object {
+        // Checked by AzanOverlayService so it doesn't draw its own overlay
+        // (and double the audio) when this Activity is already the thing
+        // on screen handling the same event via its own WebView/JS.
+        @Volatile
+        var isForeground = false
+    }
 
     private lateinit var webView: WebView
     private lateinit var prefs: SharedPreferences
@@ -38,6 +56,7 @@ class MainActivity : Activity() {
         hideSystemUi()
 
         prefs = getSharedPreferences("smart_azan_tv", MODE_PRIVATE)
+        startOverlayService()
 
         webView = WebView(this)
         setContentView(webView)
@@ -91,6 +110,56 @@ class MainActivity : Activity() {
         } else {
             loadConfiguredUrl()
         }
+
+        maybeRequestOverlayPermission()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        isForeground = true
+    }
+
+    override fun onPause() {
+        super.onPause()
+        isForeground = false
+    }
+
+    private fun startOverlayService() {
+        val intent = Intent(this, AzanOverlayService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
+    }
+
+    // "Draw over other apps" lets the background watcher (AzanOverlayService)
+    // show azan on top of whatever else is running - Android requires this
+    // to be granted by hand in Settings, no app can silently turn it on for
+    // itself. Without it, azan still plays/displays fine whenever this app
+    // is already the one on screen; it just can't take over from something
+    // else automatically.
+    private fun maybeRequestOverlayPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
+        if (Settings.canDrawOverlays(this)) return
+
+        AlertDialog.Builder(this)
+            .setTitle("Show azan over other apps")
+            .setMessage(
+                "To have Smart Azan automatically take over the screen at azan time - even while " +
+                    "something else is playing - it needs the \"draw over other apps\" permission. " +
+                    "Without it, azan still shows whenever this app is already open."
+            )
+            .setCancelable(true)
+            .setPositiveButton("Open Settings") { _, _ ->
+                val intent = Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:$packageName")
+                )
+                startActivity(intent)
+            }
+            .setNegativeButton("Not now", null)
+            .show()
     }
 
     private fun loadConfiguredUrl() {
