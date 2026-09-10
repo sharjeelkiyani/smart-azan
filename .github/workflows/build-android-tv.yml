@@ -10,6 +10,10 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Needed so the release-publish step below can create/update a release
+    # using the default GITHUB_TOKEN - without this the token is read-only.
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,3 +43,19 @@ jobs:
         with:
           name: smart-azan-tv-debug-apk
           path: android-tv-app/app/build/outputs/apk/debug/*.apk
+
+      # Workflow artifacts (the step above) need a logged-in GitHub session
+      # to download - a Release asset is a plain public URL, so this is
+      # what makes "curl the latest APK" work from anywhere, including a
+      # script on the Smart Azan server itself. The tag is fixed and gets
+      # overwritten on every build - this is a rolling "latest", not a
+      # versioned release history.
+      - name: Publish latest APK as a release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: tv-app-latest
+          name: Smart Azan TV (latest build)
+          body: >
+            Automatically rebuilt from the latest android-tv-app source on every push.
+            This is a rolling build, not a version history - see commit history for changes.
+          files: android-tv-app/app/build/outputs/apk/debug/*.apk
