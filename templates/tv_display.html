@@ -95,10 +95,28 @@
     updateCountdown();
     setInterval(updateCountdown, 1000);
 
-    // This page is only re-fetched from the server when Fully Kiosk's
-    // loadUrl fires again (at the next scheduled azan) - reload periodically
-    // so the displayed date/next-prayer/countdown baseline stays correct
-    // even across a long idle stretch between prayers (e.g. day rollover).
+    // Poll for a new azan/dua rather than waiting on a remote "load this
+    // now" command - this is what lets a plain app/browser tab left open on
+    // this page (no Fully Kiosk, no REST trigger) still play azan on its
+    // own the moment the scheduler fires.
+    let lastPlayId = {{ play_id|tojson }};
+    async function pollNowPlaying() {
+      try {
+        const r = await fetch('/tv_status');
+        const j = await r.json();
+        if (j.play && j.play_id !== lastPlayId) {
+          lastPlayId = j.play_id;
+          const audio = new Audio('/audio_file/' + encodeURIComponent(j.play));
+          audio.play().catch(() => {});
+        }
+      } catch (e) {}
+    }
+    setInterval(pollNowPlaying, 5000);
+
+    // Reload periodically anyway, so the displayed date/next-prayer/
+    // countdown baseline stays correct even across a long idle stretch
+    // between prayers (e.g. day rollover) - the polling above is only for
+    // reacting quickly to a new azan, not for the slower-changing display.
     setTimeout(() => location.reload(), 5 * 60 * 1000);
   </script>
 </body>

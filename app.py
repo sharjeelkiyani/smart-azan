@@ -263,11 +263,21 @@ threading.Thread(target=_mosque_import_loop, daemon=True).start()
 
 
 # ----------------- audio for scheduler -----------------
+# Polled by /tv_status so any TV display page - Fully Kiosk, the Android/
+# Fire TV app, or a plain browser tab left open - picks up a new azan/dua
+# on its own, without needing a remote "load this now" command at all.
+_tv_now_playing = {"filename": None, "play_id": 0}
+_tv_now_playing_lock = threading.Lock()
+
+
 def play_audio(filename, event_type="manual", label=None):
     path = os.path.join(AUDIO_FOLDER, filename)
     with config_lock:
         cfg_now = load_config()
     fire_tv.notify_display(cfg_now, audio_filename=filename)
+    with _tv_now_playing_lock:
+        _tv_now_playing["filename"] = filename
+        _tv_now_playing["play_id"] += 1
     ok = audio_player.play(path, cfg_now)
     history_log.log_event(event_type, label or event_type, filename, ok)
     return ok
@@ -573,6 +583,8 @@ def tv_display():
     now = datetime.now()
     next_prayer, next_prayer_dt, today_times, _today_row, prev_prayer_dt = _compute_next_prayer(now)
     play_file = request.args.get("play") or None
+    with _tv_now_playing_lock:
+        current_play_id = _tv_now_playing["play_id"]
     return render_template(
         "tv_display.html",
         today_times=today_times,
@@ -580,7 +592,18 @@ def tv_display():
         next_prayer_iso=next_prayer_dt.isoformat() if next_prayer_dt else None,
         prev_prayer_iso=prev_prayer_dt.isoformat() if prev_prayer_dt else None,
         play_file=play_file,
+        play_id=current_play_id,
     )
+
+
+@app.route("/tv_status")
+def tv_status():
+    """Polled by the TV display page (every few seconds) so it can start
+    playing a new azan/dua on its own - this is what lets a plain app/tab
+    that's just sitting on /tv-display react to a scheduled event, with no
+    remote-control mechanism (like Fully Kiosk's REST API) required at all."""
+    with _tv_now_playing_lock:
+        return dict(_tv_now_playing)
 
 
 @app.route("/audio_file/<path:filename>")
