@@ -1,0 +1,16 @@
+<!-- Fire TV/Android TV home-screen banner (required aspect ratio ~16:9).
+     Plain placeholder in the app's brand color - swap for a real image
+     later (android:banner in AndroidManifest.xml) if you want nicer
+     branding; a solid color is all that's needed for it to work. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp"
+    android:height="180dp"
+    android:viewportWidth="320"
+    android:viewportHeight="180">
+    <path
+        android:fillColor="#0b6e4f"
+        android:pathData="M0,0h320v180h-320z" />
+    <path
+        android:fillColor="#f7ab35"
+        android:pathData="M160,55 C140,55 124,73 124,95 C124,117 140,135 160,148 C180,135 196,117 196,95 C196,73 180,55 160,55 Z" />
+</vector>
