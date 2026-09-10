@@ -5,9 +5,11 @@ import android.app.AlertDialog
 import android.content.SharedPreferences
 import android.net.http.SslError
 import android.os.Bundle
+import android.text.InputType
 import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
+import android.view.inputmethod.EditorInfo
 import android.webkit.SslErrorHandler
 import android.webkit.WebChromeClient
 import android.webkit.WebView
@@ -25,6 +27,7 @@ class MainActivity : Activity() {
 
     private lateinit var webView: WebView
     private lateinit var prefs: SharedPreferences
+    private var setupDialog: AlertDialog? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -87,30 +90,56 @@ class MainActivity : Activity() {
     private fun promptForUrl() {
         val input = EditText(this)
         input.hint = "https://192.168.1.42:5050"
+        input.setSingleLine(true)
+        // A remote-control on-screen keyboard behaves much better with a
+        // single-line, URL-flavoured field: it puts "/" and "." within
+        // easy reach and shows a "Done" action key instead of a newline -
+        // that "Done" key is what actually submits the dialog below,
+        // since D-pad navigation from this field down to a separate Save
+        // button doesn't reliably work on every remote/launcher.
+        input.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+        input.imeOptions = EditorInfo.IME_ACTION_DONE
         prefs.getString("server_url", null)?.let { input.setText(it) }
 
-        AlertDialog.Builder(this)
+        fun trySave(): Boolean {
+            val url = input.text.toString().trim()
+            if (url.isEmpty()) return false
+            prefs.edit().putString("server_url", url).apply()
+            setupDialog?.dismiss()
+            setupDialog = null
+            loadConfiguredUrl()
+            return true
+        }
+        input.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_DONE) trySave() else false
+        }
+
+        setupDialog = AlertDialog.Builder(this)
             .setTitle("Smart Azan server address")
-            .setMessage("Enter the address shown when you open Smart Azan in a browser.")
+            .setMessage(
+                "Enter the address shown when you open Smart Azan in a browser, " +
+                    "then press Done on the keyboard to save."
+            )
             .setView(input)
             .setCancelable(false)
-            .setPositiveButton("Save") { _, _ ->
-                val url = input.text.toString().trim()
-                if (url.isNotEmpty()) {
-                    prefs.edit().putString("server_url", url).apply()
-                    loadConfiguredUrl()
-                } else {
-                    promptForUrl()
-                }
-            }
+            .setPositiveButton("Save") { _, _ -> trySave() }
             .show()
+    }
+
+    // A non-cancelable dialog already blocks tapping outside it or a plain
+    // Back press from closing it - but Activity.onBackPressed() runs
+    // independently of that and would otherwise close the whole app out
+    // from under the dialog. Swallow Back entirely while it's showing.
+    override fun onBackPressed() {
+        if (setupDialog?.isShowing == true) return
+        super.onBackPressed()
     }
 
     // Hold Back to change the server address later - the same "hold a
     // button to reach settings" pattern as Fully Kiosk and most other
     // remote-control-only kiosk/display apps use.
     override fun onKeyLongPress(keyCode: Int, event: KeyEvent?): Boolean {
-        if (keyCode == KeyEvent.KEYCODE_BACK) {
+        if (keyCode == KeyEvent.KEYCODE_BACK && setupDialog?.isShowing != true) {
             promptForUrl()
             return true
         }
