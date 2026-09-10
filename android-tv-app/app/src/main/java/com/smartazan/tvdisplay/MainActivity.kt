@@ -143,20 +143,35 @@ class MainActivity : Activity() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
         if (Settings.canDrawOverlays(this)) return
 
+        // On a regular phone/Android TV, "Open Settings" below correctly
+        // opens the toggle. Fire OS specifically doesn't expose that screen
+        // (Amazon's own restriction, not something this app can work around) -
+        // on a Fire TV, this permission has to be granted once from a
+        // computer with adb: `adb shell appops set com.smartazan.tvdisplay
+        // SYSTEM_ALERT_WINDOW allow`. It then persists permanently, the
+        // same as if it had been toggled in a settings screen.
         AlertDialog.Builder(this)
             .setTitle("Show azan over other apps")
             .setMessage(
                 "To have Smart Azan automatically take over the screen at azan time - even while " +
                     "something else is playing - it needs the \"draw over other apps\" permission. " +
-                    "Without it, azan still shows whenever this app is already open."
+                    "Without it, azan still shows whenever this app is already open.\n\n" +
+                    "On a Fire TV, Amazon doesn't expose a settings screen for this - grant it once " +
+                    "from a computer with adb instead:\n" +
+                    "adb shell appops set $packageName SYSTEM_ALERT_WINDOW allow"
             )
             .setCancelable(true)
             .setPositiveButton("Open Settings") { _, _ ->
-                val intent = Intent(
-                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    Uri.parse("package:$packageName")
-                )
-                startActivity(intent)
+                try {
+                    val intent = Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:$packageName")
+                    )
+                    startActivity(intent)
+                } catch (e: Exception) {
+                    // No such settings screen on this device (Fire OS) - the
+                    // adb command in the message above is the fallback.
+                }
             }
             .setNegativeButton("Not now", null)
             .show()

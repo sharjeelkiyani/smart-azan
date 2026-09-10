@@ -142,6 +142,21 @@ class AzanOverlayService : Service() {
                 handler?.proceed()
             }
         }
+        // Without this, the overlay has no way to be dismissed early - it
+        // would otherwise sit on top of whatever the user was doing for the
+        // full auto-dismiss window with no escape hatch at all.
+        webView.isFocusable = true
+        webView.isFocusableInTouchMode = true
+        webView.setOnKeyListener { _, keyCode, event ->
+            if (keyCode == android.view.KeyEvent.KEYCODE_BACK &&
+                event.action == android.view.KeyEvent.ACTION_UP
+            ) {
+                removeOverlay()
+                true
+            } else {
+                false
+            }
+        }
 
         val overlayType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -160,6 +175,7 @@ class AzanOverlayService : Service() {
         try {
             webView.loadUrl("$base/tv-display?play=" + URLEncoder.encode(filename, "UTF-8"))
             windowManager?.addView(webView, params)
+            webView.requestFocus()
             overlayView = webView
             mainHandler.postDelayed({ removeOverlay() }, OVERLAY_AUTO_DISMISS_MS)
         } catch (e: Exception) {
