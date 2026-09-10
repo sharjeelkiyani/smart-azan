@@ -206,7 +206,6 @@ if hasattr(wifi, "start_background_threads"):
 # connected.
 def _bluetooth_autoconnect_loop():
     misses = 0
-    last_default_set = None
     while True:
         with config_lock:
             c = load_config()
@@ -229,12 +228,23 @@ def _bluetooth_autoconnect_loop():
         # audio_player resolves to. Our own playback always targets a
         # device explicitly, so this doesn't affect it - it exists for
         # secondary consumers that don't support explicit device selection
-        # (snapclient's pulse backend only ever plays to "default").
+        # (snapclient's pulse backend only ever plays to "default", which is
+        # how azan is actually reaching the speaker when Snapcast is on -
+        # see audio_player.play_via_snapcast).
+        #
+        # Compares against the *live* current default (not "whatever we last
+        # commanded") on every pass, so this is self-healing if something
+        # else - PipeWire/WirePlumber's own auto-switching, a bluetooth
+        # reconnect blip, another app opening an audio stream - changes the
+        # real default sink without us knowing. Tracking only our own last
+        # command missed exactly that case: our computed target hadn't
+        # changed, so the stale bookkeeping said "nothing to do" even though
+        # the actual default had silently drifted elsewhere, leaving
+        # Snapcast (and so azan) routed away from the Bluetooth speaker.
         backend, target = audio_player.resolve_target(c)
-        if backend == "pulse" and target and target != last_default_set:
+        if backend == "pulse" and target and audio_player.default_pulse_sink() != target:
             try:
                 subprocess.run(["pactl", "set-default-sink", target], timeout=5, check=True)
-                last_default_set = target
                 print(f"[Audio] default sink set to {target}")
             except Exception as e:
                 print(f"[Audio] set-default-sink error: {e}")
