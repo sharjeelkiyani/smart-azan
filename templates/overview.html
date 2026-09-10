@@ -158,14 +158,27 @@
         Azan Status
       </h2>
 
-      <div class="system-active">
-        <span class="system-active-dot">✓</span>
-        <span>System is Active</span>
-      </div>
+      {% if bluetooth_disconnected %}
+        <div class="system-active" style="color: var(--danger, #ff7b74)">
+          <span class="system-active-dot" style="background: var(--danger, #ff7b74)">!</span>
+          <span>Speaker not connected</span>
+        </div>
+      {% else %}
+        <div class="system-active">
+          <span class="system-active-dot">✓</span>
+          <span>System is Active</span>
+        </div>
+      {% endif %}
 
       <div class="azan-status-copy">
         <div>♩ &nbsp; Next Azan: <strong>{{ next_prayer or '—' }}</strong></div>
         <div>🔈 &nbsp; Speaker: <strong>{{ cfg.get('speaker_name', 'Main Speaker') }}</strong></div>
+        {% if bluetooth_disconnected %}
+          <div class="muted">
+            ⚠️ Bluetooth speaker isn't connected - azan may be inaudible right now. Re-pair it from
+            <a href="{{ url_for('azan.settings') }}">Settings</a>.
+          </div>
+        {% endif %}
       </div>
 
       <div class="waveform" id="waveform"></div>

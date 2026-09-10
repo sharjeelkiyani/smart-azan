@@ -524,6 +524,19 @@ def index():
     audio_devices = audio_player.list_outputs(current_cfg)
     recent_history = history_log.get_recent(6)
 
+    # A configured Bluetooth speaker that isn't currently connected means
+    # azan is silently falling back to whatever else resolve_target() finds
+    # (HDMI/ALSA) - often inaudible if nothing else is plugged in. Surface
+    # this on the dashboard instead of only in the server log, since the
+    # background auto-reconnect loop can't fix a speaker that's been fully
+    # un-paired (not just out of range) - that needs a human to re-pair it.
+    bt_mac = current_cfg.get("bluetooth_mac")
+    bt_mode = (current_cfg.get("audio_output_mode") or "auto").lower()
+    bluetooth_disconnected = bool(
+        bt_mac and bt_mode in ("bluetooth", "auto")
+        and not audio_devices.get("bluetooth_connected_sink")
+    )
+
     return render_template(
         "overview.html",
         cfg=current_cfg,
@@ -534,6 +547,7 @@ def index():
         prev_prayer_iso=prev_prayer_dt.isoformat() if prev_prayer_dt else None,
         weather=weather,
         audio_devices=audio_devices,
+        bluetooth_disconnected=bluetooth_disconnected,
         ntp_synced=_ntp_status(),
         recent_history=recent_history,
         current_date=today_str,
