@@ -6,10 +6,12 @@ import android.content.SharedPreferences
 import android.net.http.SslError
 import android.os.Bundle
 import android.text.InputType
+import android.util.Log
 import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
+import android.webkit.ConsoleMessage
 import android.webkit.SslErrorHandler
 import android.webkit.WebChromeClient
 import android.webkit.WebView
@@ -48,7 +50,16 @@ class MainActivity : Activity() {
         webView.settings.loadWithOverviewMode = true
         webView.settings.useWideViewPort = true
 
-        webView.webChromeClient = WebChromeClient()
+        // Forwards the page's console.log/error to logcat (tag "SmartAzanTV")
+        // so JS-side failures (a rejected audio.play(), a fetch error) are
+        // actually visible instead of silently swallowed - the page's own
+        // try/catch blocks were logging to a console nobody could see.
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onConsoleMessage(msg: ConsoleMessage?): Boolean {
+                Log.d("SmartAzanTV", "console: ${msg?.message()}")
+                return true
+            }
+        }
         webView.webViewClient = object : WebViewClient() {
             // The Smart Azan server uses a self-signed HTTPS certificate
             // (it's your own private LAN device, not a public site) -
