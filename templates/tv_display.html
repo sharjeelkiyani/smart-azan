@@ -100,25 +100,16 @@
     // this page (no Fully Kiosk, no REST trigger) still play azan on its
     // own the moment the scheduler fires.
     let lastPlayId = {{ play_id|tojson }};
-    console.log('[tv] initial lastPlayId=' + lastPlayId);
     async function pollNowPlaying() {
       try {
         const r = await fetch('/tv_status');
         const j = await r.json();
-        if (j.play && j.play_id !== lastPlayId) {
+        if (j.filename && j.play_id !== lastPlayId) {
           lastPlayId = j.play_id;
-          console.log('[tv] new play_id=' + j.play_id + ' file=' + j.play + ' - starting audio');
-          const audio = new Audio('/audio_file/' + encodeURIComponent(j.play));
-          audio.addEventListener('error', () => console.log('[tv] audio error: ' + JSON.stringify(audio.error)));
-          audio.addEventListener('playing', () => console.log('[tv] audio actually playing'));
-          audio.play().then(
-            () => console.log('[tv] audio.play() resolved'),
-            (err) => console.log('[tv] audio.play() rejected: ' + err)
-          );
+          const audio = new Audio('/audio_file/' + encodeURIComponent(j.filename));
+          audio.play().catch(() => {});
         }
-      } catch (e) {
-        console.log('[tv] poll error: ' + e);
-      }
+      } catch (e) {}
     }
     setInterval(pollNowPlaying, 5000);
 
