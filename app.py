@@ -35,58 +35,79 @@ config_lock = threading.Lock()
 
 
 # ----------------- config helpers -----------------
+def _fresh_default_config():
+    cfg = {
+        "lat": 0,
+        "lon": 0,
+        "method": "ISNA",
+        "use_auto": False,
+        "azan_audio": "default_azan.mp3",
+        "azan_audio_per_prayer": {
+            "Fajr": "default_azan.mp3",
+            "Dhuhr": "default_azan.mp3",
+            "Asr": "default_azan.mp3",
+            "Maghrib": "default_azan.mp3",
+            "Isha": "default_azan.mp3",
+        },
+        "duas": [],
+        "friday_dua": {
+            "file": "", "time": "", "khutbah_time": "", "khutbah_file": "",
+            "khutbah_mode": "file", "khutbah_relay_track_id": "", "khutbah_relay_minutes": 45,
+        },
+        "iqama_audio": "iqama.mp3",
+        "output_device": "auto",
+        "audio_output_mode": "auto",
+        "alsa_device": "",
+        "bluetooth_mac": None,
+        "bluetooth_sink": None,
+        "speaker_name": "Main Speaker",
+        "volume": 70,
+        "audio_gain_db": 0,
+        "hotspot_ssid": "SmartAzanPi",
+        "hotspot_password": "changeme123",
+        "hotspot_enabled": False,
+        "auto_hotspot_enabled": False,
+        "wifi_autoconnect": True,
+        "preferred_wifi_ssid": "",
+        "wifi_networks": {},
+        "after_azan_dua": "",
+        "port": 5050,
+        "notifications_enabled": True,
+        "reminder_minutes_before_azan": 10,
+        "mosque_import_enabled": False,
+        "mosque_import_source": "aisha_masjid",
+        "tv_display_enabled": False,
+        "fully_kiosk_url": "",
+        "fully_kiosk_password": "",
+        "tv_http_port": 5051,
+    }
+    save_config(cfg)
+    return cfg
+
+
 def load_config():
     if not os.path.exists(CONFIG_FILE):
-        cfg = {
-            "lat": 0,
-            "lon": 0,
-            "method": "ISNA",
-            "use_auto": False,
-            "azan_audio": "default_azan.mp3",
-            "azan_audio_per_prayer": {
-                "Fajr": "default_azan.mp3",
-                "Dhuhr": "default_azan.mp3",
-                "Asr": "default_azan.mp3",
-                "Maghrib": "default_azan.mp3",
-                "Isha": "default_azan.mp3",
-            },
-            "duas": [],
-            "friday_dua": {
-                "file": "", "time": "", "khutbah_time": "", "khutbah_file": "",
-                "khutbah_mode": "file", "khutbah_relay_track_id": "", "khutbah_relay_minutes": 45,
-            },
-            "iqama_audio": "iqama.mp3",
-            "output_device": "auto",
-            "audio_output_mode": "auto",
-            "alsa_device": "",
-            "bluetooth_mac": None,
-            "bluetooth_sink": None,
-            "speaker_name": "Main Speaker",
-            "volume": 70,
-            "audio_gain_db": 0,
-            "hotspot_ssid": "SmartAzanPi",
-            "hotspot_password": "changeme123",
-            "hotspot_enabled": False,
-            "auto_hotspot_enabled": False,
-            "wifi_autoconnect": True,
-            "preferred_wifi_ssid": "",
-            "wifi_networks": {},
-            "after_azan_dua": "",
-            "port": 5050,
-            "notifications_enabled": True,
-            "reminder_minutes_before_azan": 10,
-            "mosque_import_enabled": False,
-            "mosque_import_source": "aisha_masjid",
-            "tv_display_enabled": False,
-            "fully_kiosk_url": "",
-            "fully_kiosk_password": "",
-            "tv_http_port": 5051,
-        }
-        save_config(cfg)
-        return cfg
+        return _fresh_default_config()
 
-    with open(CONFIG_FILE) as f:
-        cfg = json.load(f)
+    try:
+        with open(CONFIG_FILE) as f:
+            cfg = json.load(f)
+    except Exception as e:
+        # A corrupted config.json (e.g. left truncated/empty by a hang or
+        # power loss mid-write - the exact failure that motivated the
+        # atomic save in save_config() below) used to crash the whole app
+        # on startup, with no way to recover except editing the file by
+        # hand over SSH. Move the bad file aside for inspection and boot
+        # with fresh defaults instead, so the app - and the ability to
+        # re-enter settings from the UI - comes back on its own.
+        print(f"[Config] {CONFIG_FILE} is corrupted ({e}), moving it aside and using defaults")
+        try:
+            bad_path = f"{CONFIG_FILE}.corrupted-{int(time.time())}"
+            os.replace(CONFIG_FILE, bad_path)
+            print(f"[Config] saved corrupted file to {bad_path} for inspection")
+        except Exception as move_err:
+            print(f"[Config] could not preserve corrupted file: {move_err}")
+        return _fresh_default_config()
 
     # backfill
     cfg.setdefault("azan_audio", "default_azan.mp3")
@@ -135,8 +156,22 @@ def save_config(cfg):
         if k in existing and k not in cfg:
             cfg[k] = existing[k]
 
-    with open(CONFIG_FILE, "w") as f:
+    # Write to a temp file and atomically rename it over the real one,
+    # instead of truncating CONFIG_FILE in place - `open(..., "w")` zeroes
+    # the file immediately, so a crash/power-loss/hard-reboot at any point
+    # before json.dump() finishes leaves a 0-byte or truncated config.json,
+    # which then fails to parse on the next start and the whole app can't
+    # boot at all. This happened for real: the Pi hung and had to be
+    # power-cycled, and config.json came back as a 0-byte file, crash-
+    # looping the service until it was manually rebuilt. os.replace() is
+    # atomic on POSIX filesystems - the old file stays fully intact unless
+    # the new one is completely written and fsynced first.
+    tmp_path = CONFIG_FILE + ".tmp"
+    with open(tmp_path, "w") as f:
         json.dump(cfg, f, indent=2)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp_path, CONFIG_FILE)
 
 
 # make sure audio dir exists
