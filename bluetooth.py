@@ -103,11 +103,44 @@ def run_bluetoothctl_cmd(args):
     return _run_btctl_cmd(args)
 
 
+BT_POWER_WRAPPER = "/usr/local/bin/smart-azan-bt-power"
+
+
+def bluetooth_powered():
+    """True if the controller reports Powered: yes right now."""
+    try:
+        out = subprocess.run(["bluetoothctl", "show"], text=True, capture_output=True, timeout=8).stdout
+        return "Powered: yes" in out
+    except Exception:
+        return False
+
+
+def power_on_bluetooth():
+    """
+    Turn the Bluetooth radio on. Plain 'bluetoothctl power on' only talks to
+    bluetoothd over D-Bus - it can't lift an rfkill soft-block (a common
+    default state on fresh Pi/Debian images), so it silently no-ops in that
+    case. If we installed the NOPASSWD sudo wrapper (see install.sh), use it
+    to unblock rfkill first; otherwise fall back to the plain bluetoothctl
+    call, same graceful-degrade pattern as wifi.py's nmcli wrapper.
+    """
+    import os
+    if os.path.exists(BT_POWER_WRAPPER):
+        try:
+            subprocess.run(["sudo", BT_POWER_WRAPPER], capture_output=True, text=True, timeout=10)
+        except Exception as e:
+            print("[Bluetooth] power-on wrapper failed:", e)
+    _run_btctl_script(["power on"])
+    return bluetooth_powered()
+
+
 def ensure_bluetooth_ready():
     """
     Prepare controller: power on + agent + default-agent.
     We do 'agent off' first so we don't get 'Failed to register agent object'.
     """
+    if not bluetooth_powered():
+        power_on_bluetooth()
     _run_btctl_script([
         "power on",
         "agent NoInputNoOutput",
@@ -210,11 +243,18 @@ def bt_state():
 
     return jsonify({
         "scanning": scanning,
+        "powered": bluetooth_powered(),
         "paired": paired,
         "trusted": trusted,
         "connected": connected,
         "all": all_devs,
     })
+
+
+@bp.route("/bt_power_on", methods=["POST"])
+def bt_power_on():
+    ok = power_on_bluetooth()
+    return jsonify({"ok": ok, "powered": ok})
 
 
 @bp.route("/bt_scan", methods=["POST"])

@@ -26,7 +26,23 @@ sudo apt-get update
 sudo apt-get install -y \
   python3 python3-venv python3-pip \
   ffmpeg mpg123 mpv alsa-utils pulseaudio-utils \
-  bluez network-manager
+  bluez network-manager rfkill
+
+echo "==> Setting up a passwordless helper to power on Bluetooth from the web UI..."
+# Fresh Pi/Debian images commonly ship with the Bluetooth radio rfkill
+# soft-blocked. Lifting that block needs root, and the web app runs as this
+# user - not root - so give it a narrow, single-purpose sudo rule (same
+# pattern as the existing nmcli Wi-Fi-connect helper) instead of broad
+# passwordless sudo.
+sudo tee /usr/local/bin/smart-azan-bt-power > /dev/null <<'EOF'
+#!/bin/sh
+rfkill unblock bluetooth
+bluetoothctl power on
+EOF
+sudo chmod 755 /usr/local/bin/smart-azan-bt-power
+echo "$(whoami) ALL=(ALL) NOPASSWD: /usr/local/bin/smart-azan-bt-power" | \
+  sudo tee /etc/sudoers.d/99-smart-azan-bt-power > /dev/null
+sudo chmod 440 /etc/sudoers.d/99-smart-azan-bt-power
 
 echo "==> Creating Python virtual environment..."
 if [ ! -d venv ]; then

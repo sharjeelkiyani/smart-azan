@@ -160,6 +160,10 @@
   <!-- Bluetooth scan & connect -->
   <section class="card">
     <h2>Bluetooth · Scan &amp; Connect</h2>
+    <div class="row" style="gap:8px; margin-bottom:8px">
+      <span id="bt-power-status" class="pill">Bluetooth: checking…</span>
+      <button id="btn-bt-power-on" class="btn secondary" type="button" style="display:none">🔵 Turn Bluetooth On</button>
+    </div>
     <div class="row" style="gap:8px">
       <button id="btn-scan-bt-settings" class="btn primary" type="button">🔎 Scan Bluetooth</button>
       <button id="btn-stop-bt-scan" class="btn secondary" type="button">⏹ Stop scan</button>
@@ -417,6 +421,8 @@
     const stopBtn   = document.getElementById('btn-stop-bt-scan');
     const statusPill= document.getElementById('bt-scan-status');
     const list      = document.getElementById('bt-device-list-settings');
+    const powerPill = document.getElementById('bt-power-status');
+    const powerBtn  = document.getElementById('btn-bt-power-on');
 
     async function post(url, data) {
       const body = new URLSearchParams();
@@ -428,12 +434,45 @@
       return r.json();
     }
 
+    function showPower(powered) {
+      powerPill.textContent = 'Bluetooth: ' + (powered ? 'On' : 'Off');
+      powerBtn.style.display = powered ? 'none' : '';
+    }
+
+    async function checkPower() {
+      try {
+        const data = await getJSON('{{ url_for("bluetooth.bt_state") }}');
+        showPower(!!data.powered);
+      } catch (e) {
+        powerPill.textContent = 'Bluetooth: unknown';
+      }
+    }
+
+    async function powerOn() {
+      powerBtn.disabled = true;
+      powerPill.textContent = 'Bluetooth: turning on…';
+      try {
+        const r = await post('{{ url_for("bluetooth.bt_power_on") }}', {});
+        const data = await r.json();
+        showPower(!!data.powered);
+        if (!data.powered) {
+          alert('Could not turn Bluetooth on automatically. It may need a reboot, or run manually: sudo rfkill unblock bluetooth');
+        }
+      } finally {
+        powerBtn.disabled = false;
+      }
+    }
+
+    if (powerBtn) powerBtn.addEventListener('click', powerOn);
+    checkPower();
+
     async function startScan() {
       scanBtn.disabled = true;
       statusPill.textContent = 'SCANNING…';
       list.innerHTML = '';
       try {
         await post('{{ url_for("bluetooth.bt_scan") }}', {});
+        setTimeout(checkPower, 1500);
         const started = Date.now();
         async function poll() {
           const data = await getJSON('{{ url_for("bluetooth.bt_devices_api") }}');
