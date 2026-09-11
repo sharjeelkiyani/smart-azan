@@ -32,7 +32,7 @@ echo "==> Setting up a passwordless helper to power on Bluetooth from the web UI
 # Fresh Pi/Debian images commonly ship with the Bluetooth radio rfkill
 # soft-blocked. Lifting that block needs root, and the web app runs as this
 # user - not root - so give it a narrow, single-purpose sudo rule (same
-# pattern as the existing nmcli Wi-Fi-connect helper) instead of broad
+# pattern as the nmcli Wi-Fi-connect helper below) instead of broad
 # passwordless sudo.
 sudo tee /usr/local/bin/smart-azan-bt-power > /dev/null <<'EOF'
 #!/bin/sh
@@ -43,6 +43,30 @@ sudo chmod 755 /usr/local/bin/smart-azan-bt-power
 echo "$(whoami) ALL=(ALL) NOPASSWD: /usr/local/bin/smart-azan-bt-power" | \
   sudo tee /etc/sudoers.d/99-smart-azan-bt-power > /dev/null
 sudo chmod 440 /etc/sudoers.d/99-smart-azan-bt-power
+
+echo "==> Setting up a passwordless helper to connect Wi-Fi from the web UI..."
+# NetworkManager requires PolicyKit authorization to add/activate a
+# connection, which this user doesn't have by default when the app runs
+# headless (no active graphical/polkit session) - nmcli then fails with
+# "Not authorized to control networking." Same narrow sudo-wrapper pattern
+# as the Bluetooth helper above.
+sudo tee /usr/local/bin/nmcli-wifi-connect > /dev/null <<'EOF'
+#!/bin/sh
+SSID="$1"
+PASS="$2"
+IFACE="$3"
+IFACE_ARG=""
+[ -n "$IFACE" ] && IFACE_ARG="ifname $IFACE"
+if [ -n "$PASS" ]; then
+  exec /usr/bin/nmcli dev wifi connect "$SSID" password "$PASS" $IFACE_ARG
+else
+  exec /usr/bin/nmcli dev wifi connect "$SSID" $IFACE_ARG
+fi
+EOF
+sudo chmod 755 /usr/local/bin/nmcli-wifi-connect
+echo "$(whoami) ALL=(ALL) NOPASSWD: /usr/local/bin/nmcli-wifi-connect" | \
+  sudo tee /etc/sudoers.d/99-smart-azan-nmcli > /dev/null
+sudo chmod 440 /etc/sudoers.d/99-smart-azan-nmcli
 
 echo "==> Creating Python virtual environment..."
 if [ ! -d venv ]; then
