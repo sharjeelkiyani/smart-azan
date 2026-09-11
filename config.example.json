@@ -23,6 +23,8 @@
   "alsa_device": "",
   "bluetooth_mac": null,
   "bluetooth_sink": null,
+  "bluetooth_keepalive_enabled": false,
+  "bluetooth_keepalive_interval_s": 240,
   "speaker_name": "Main Speaker",
   "volume": 70,
   "hotspot_ssid": "SmartAzanPi",

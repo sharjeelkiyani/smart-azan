@@ -476,6 +476,8 @@ def settings():
                 bt_sink = request.form.get("bluetooth_sink", "")
                 cfg["bluetooth_sink"] = bt_sink
 
+                cfg["bluetooth_keepalive_enabled"] = request.form.get("bluetooth_keepalive_enabled") == "on"
+
             elif form_id == "mosque_import":
                 cfg["mosque_import_enabled"] = request.form.get("mosque_import_enabled") == "on"
 

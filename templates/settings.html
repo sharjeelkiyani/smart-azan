@@ -148,6 +148,21 @@
         <span class="muted" id="audio-test-hint"></span>
       </div>
 
+      <div class="row" style="margin-top:12px; gap:10px; align-items:center">
+        <label>
+          <input type="checkbox" name="bluetooth_keepalive_enabled"
+                 {% if cfg.get('bluetooth_keepalive_enabled') %}checked{% endif %}>
+          Keep Bluetooth speaker awake (prevents its own auto-off when idle)
+        </label>
+        <button class="btn" type="submit">Save audio</button>
+      </div>
+      <p class="muted" style="margin-top:4px">
+        Some Bluetooth speakers power themselves off after a few minutes of
+        silence, so they can miss the next prayer time. When enabled, a very
+        short, quiet tone plays to the speaker every few minutes to keep it
+        awake - it doesn't affect azan volume or playback.
+      </p>
+
       <p class="muted" style="margin-top:6px">
         Current BT MAC: <code>{{ cfg.get('bluetooth_mac', '—') }}</code> ·
         Detected outputs: {{ audio_outputs.outputs|length }} ·

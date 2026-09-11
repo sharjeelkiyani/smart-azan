@@ -429,7 +429,7 @@ def play(path, cfg, timeout=PLAY_TIMEOUT, attempts=PLAY_ATTEMPTS):
     return False
 
 
-def _make_tone_wav(path, frequency=880, duration=1.0, rate=44100):
+def _make_tone_wav(path, frequency=880, duration=1.0, rate=44100, amplitude=0.5):
     """Write a short sine-wave WAV using only the stdlib - no ffmpeg/external
     process involved, so the settings "Test sound" button still works even
     if ffmpeg itself is broken on this system."""
@@ -444,7 +444,7 @@ def _make_tone_wav(path, frequency=880, duration=1.0, rate=44100):
         w.setframerate(rate)
         frames = bytearray()
         for i in range(n_samples):
-            val = int(32767 * 0.5 * math.sin(2 * math.pi * frequency * i / rate))
+            val = int(32767 * amplitude * math.sin(2 * math.pi * frequency * i / rate))
             frames += struct.pack("<hh", val, val)
         w.writeframes(bytes(frames))
 
@@ -470,6 +470,30 @@ def play_test_tone(backend=None, target=None, timeout=10, attempts=PLAY_ATTEMPTS
             except Exception as e:
                 last_err = str(e)
         return False, last_err
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+
+
+def play_keepalive_tone(backend, target, timeout=10):
+    """A very short, quiet tone - just enough of a real audio signal to
+    reset a Bluetooth speaker's own idle auto-power-off timer, without being
+    an audible interruption. Deliberately much quieter/shorter than
+    play_test_tone(), which is meant to actually be heard."""
+    if backend is None or target is None:
+        return False
+    import tempfile
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tf:
+        tmp_path = tf.name
+    try:
+        _make_tone_wav(tmp_path, frequency=200, duration=0.3, amplitude=0.06)
+        _play_native(tmp_path, backend, target, timeout)
+        return True
+    except Exception as e:
+        print("[Bluetooth Keepalive] play error:", e)
+        return False
     finally:
         try:
             os.unlink(tmp_path)

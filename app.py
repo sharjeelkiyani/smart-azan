@@ -290,6 +290,36 @@ def _bluetooth_autoconnect_loop():
 threading.Thread(target=_bluetooth_autoconnect_loop, daemon=True).start()
 
 
+# Some Bluetooth speakers power themselves fully off after a few minutes of
+# silence to save battery - a real hardware power state, not just a dropped
+# link, so no amount of bluetoothctl reconnecting can wake it back up once
+# that happens. The only software fix is to never let it go that quiet:
+# periodically send a very short, quiet tone (see
+# audio_player.play_keepalive_tone) that resets the speaker's own idle timer
+# without being an audible interruption. Opt-in via Settings since it's a
+# real (if faint) periodic sound, not something every setup wants.
+def _bluetooth_keepalive_loop():
+    while True:
+        with config_lock:
+            c = load_config()
+        interval = 240
+        try:
+            interval = max(60, int(c.get("bluetooth_keepalive_interval_s", 240) or 240))
+        except (TypeError, ValueError):
+            pass
+
+        if c.get("bluetooth_keepalive_enabled"):
+            mac = c.get("bluetooth_mac")
+            sink = audio_player.bluetooth_sink_for_mac(mac) if mac else None
+            if sink:
+                audio_player.play_keepalive_tone("pulse", sink)
+
+        time.sleep(interval)
+
+
+threading.Thread(target=_bluetooth_keepalive_loop, daemon=True).start()
+
+
 # ----------------- mosque timetable auto-sync -----------------
 # Opt-in (mosque_import_enabled) - re-fetches the configured mosque's
 # published timetable once a day and merges any changed times into
