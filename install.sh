@@ -52,7 +52,12 @@ if [ ! -f cert.pem ] || [ ! -f cert.key ]; then
 fi
 
 echo "==> Installing systemd service..."
-sed "s/__USER__/$(whoami)/" smart-azan.service | sudo tee /etc/systemd/system/smart-azan.service > /dev/null
+# Substituted directly rather than relying on systemd's own %h/%U specifiers -
+# those are mishandled on some newer systemd versions (confirmed: systemd 257
+# on Debian 13 fails WorkingDirectory=%h/... with a spurious "Permission
+# denied" on CHDIR, even though the same absolute path works fine).
+sed -e "s/__USER__/$(whoami)/" -e "s#__HOME__#$HOME#g" -e "s/__UID__/$(id -u)/" \
+  smart-azan.service | sudo tee /etc/systemd/system/smart-azan.service > /dev/null
 sudo systemctl daemon-reload
 sudo systemctl enable smart-azan.service
 sudo systemctl restart smart-azan.service

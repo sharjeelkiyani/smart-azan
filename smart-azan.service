@@ -6,13 +6,13 @@ After=network-online.target bluetooth.target sound.target
 [Service]
 User=__USER__
 Type=simple
-ExecStart=%h/smart_azan_final/venv/bin/gunicorn -c %h/smart_azan_final/gunicorn_conf.py app:app
-WorkingDirectory=%h/smart_azan_final
+ExecStart=__HOME__/smart_azan_final/venv/bin/gunicorn -c __HOME__/smart_azan_final/gunicorn_conf.py app:app
+WorkingDirectory=__HOME__/smart_azan_final
 ExecStartPre=/bin/sleep 3
 Restart=always
 RestartSec=5
-Environment="XDG_RUNTIME_DIR=/run/user/%U"
-Environment="PULSE_SERVER=/run/user/%U/pulse/native"
+Environment="XDG_RUNTIME_DIR=/run/user/__UID__"
+Environment="PULSE_SERVER=/run/user/__UID__/pulse/native"
 Environment="PYTHONUNBUFFERED=1"
 
 [Install]
