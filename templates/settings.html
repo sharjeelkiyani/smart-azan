@@ -472,7 +472,6 @@
       list.innerHTML = '';
       try {
         await post('{{ url_for("bluetooth.bt_scan") }}', {});
-        setTimeout(checkPower, 1500);
         const started = Date.now();
         async function poll() {
           const data = await getJSON('{{ url_for("bluetooth.bt_devices_api") }}');

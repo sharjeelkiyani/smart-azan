@@ -228,10 +228,18 @@ def bt_state():
     all_txt = _run_btctl_script(["devices"])
     all_devs = _parse_devices_output(all_txt)
 
+    # Only paired devices can meaningfully be Trusted/Connected in practice -
+    # checking every device 'devices' has ever seen (which grows with every
+    # scan, easily 15-20+ nearby devices) meant spawning a separate
+    # 'bluetoothctl info <mac>' subprocess per device on EVERY /bt_state poll.
+    # On a low-power Pi (e.g. a Pi 3B with ~1GB RAM) that was enough
+    # concurrent bluetoothctl/D-Bus activity to make the whole web app
+    # briefly unresponsive. Paired devices are a small, bounded set (usually
+    # 0-2), so this is the same practical result at a fraction of the cost.
     trusted = []
     connected = []
 
-    for d in all_devs:
+    for d in paired:
         info = _bt_info(d["mac"])
         if "Trusted: yes" in info:
             trusted.append(d)
