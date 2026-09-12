@@ -139,6 +139,40 @@ def _parse_tv_ips(cfg):
     return [p.strip() for p in parts if p.strip()]
 
 
+def _tv_cycle_one(ip, finished_event):
+    """Wake/sleep cycle for a single Fire TV, run in its own thread so one
+    slow/unreachable device (a laggy adb connect, a VPN adding latency)
+    can never delay another device's wake, or the azan itself. Logs every
+    step - this used to be entirely silent on success, which meant a real
+    failure during an actual azan looked identical to "working fine" with
+    no way to tell them apart after the fact."""
+    was_awake = _adb_is_awake(ip)
+    if was_awake:
+        print(f"[FireTV] {ip} already awake, leaving it alone", flush=True)
+        finished_event.wait(timeout=1800)
+        return
+
+    print(f"[FireTV] {ip} asleep, sending wake for azan", flush=True)
+    _adb(ip, "shell", "input", "keyevent", _KEYCODE_WAKEUP)
+    time.sleep(3)
+    if _adb_is_awake(ip):
+        print(f"[FireTV] {ip} woke successfully", flush=True)
+    else:
+        print(f"[FireTV] {ip} still asleep 3s after wake command - retrying once", flush=True)
+        _adb(ip, "shell", "input", "keyevent", _KEYCODE_WAKEUP)
+        time.sleep(3)
+        if _adb_is_awake(ip):
+            print(f"[FireTV] {ip} woke on retry", flush=True)
+        else:
+            print(f"[FireTV] {ip} still asleep after retry - adb connect may "
+                  f"have failed or been too slow", flush=True)
+
+    finished_event.wait(timeout=1800)  # safety cap - never wait forever
+    time.sleep(_POST_AZAN_BUFFER_S)
+    print(f"[FireTV] {ip} putting back to sleep", flush=True)
+    _adb(ip, "shell", "input", "keyevent", _KEYCODE_SLEEP)
+
+
 def run_adb_tv_cycle(cfg, finished_event):
     """If enabled, wake every configured Fire TV that's currently asleep for
     azan; once finished_event is set (azan playback on the main speaker has
@@ -154,17 +188,11 @@ def run_adb_tv_cycle(cfg, finished_event):
     if not ips:
         return
 
-    woke = {}
-    for ip in ips:
-        woke[ip] = not _adb_is_awake(ip)
-        if woke[ip]:
-            _adb(ip, "shell", "input", "keyevent", _KEYCODE_WAKEUP)
-
-    finished_event.wait(timeout=1800)  # safety cap - never wait forever
-
-    if any(woke.values()):
-        time.sleep(_POST_AZAN_BUFFER_S)
-
-    for ip in ips:
-        if woke.get(ip):
-            _adb(ip, "shell", "input", "keyevent", _KEYCODE_SLEEP)
+    threads = [
+        threading.Thread(target=_tv_cycle_one, args=(ip, finished_event), daemon=True)
+        for ip in ips
+    ]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=1800 + _POST_AZAN_BUFFER_S + 30)
