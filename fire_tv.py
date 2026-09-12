@@ -8,6 +8,7 @@ Reference commands used here: screenOn, stopScreensaver, toForeground, loadUrl.
 This module only ever wakes the TV and points it at our own /tv-display page -
 it never reaches into Fully Kiosk's settings or anything else.
 """
+import re
 import socket
 import subprocess
 import threading
@@ -115,23 +116,43 @@ def _adb_is_awake(ip):
     return bool(r) and "mWakefulness=Awake" in (r.stdout or "")
 
 
+def _parse_tv_ips(cfg):
+    """adb_tv_ips is stored as a single comma/whitespace-separated string
+    (multiple Fire TVs, each running the Smart Azan TV app) - accepts a
+    list too, and falls back to the older single-IP adb_tv_ip field."""
+    raw = cfg.get("adb_tv_ips")
+    if raw is None:
+        raw = cfg.get("adb_tv_ip")
+    if isinstance(raw, list):
+        parts = raw
+    else:
+        parts = re.split(r"[,\s]+", str(raw or ""))
+    return [p.strip() for p in parts if p.strip()]
+
+
 def run_adb_tv_cycle(cfg, finished_event):
-    """If enabled and the TV is currently asleep, wake it for azan; once
-    finished_event is set (azan playback on the main speaker has ended),
-    put it back to sleep - but only if *this* call was the one that woke it,
-    so a TV someone is actually watching is never turned off out from under
-    them. Meant to be run in its own background thread, decoupled from the
-    actual azan audio timing - adb round-trips (network + HDMI wake time)
-    must never be able to delay the azan itself."""
-    ip = (cfg.get("adb_tv_ip") or "").strip()
-    if not cfg.get("adb_tv_enabled") or not ip:
+    """If enabled, wake every configured Fire TV that's currently asleep for
+    azan; once finished_event is set (azan playback on the main speaker has
+    ended), put each one back to sleep - but only the ones *this* call
+    actually woke, so a TV someone is actually watching is never turned off
+    out from under them. Meant to be run in its own background thread,
+    decoupled from the actual azan audio timing - adb round-trips (network +
+    HDMI wake time), for however many TVs are configured, must never be able
+    to delay the azan itself."""
+    if not cfg.get("adb_tv_enabled"):
+        return
+    ips = _parse_tv_ips(cfg)
+    if not ips:
         return
 
-    we_woke_it = not _adb_is_awake(ip)
-    if we_woke_it:
-        _adb(ip, "shell", "input", "keyevent", _KEYCODE_WAKEUP)
+    woke = {}
+    for ip in ips:
+        woke[ip] = not _adb_is_awake(ip)
+        if woke[ip]:
+            _adb(ip, "shell", "input", "keyevent", _KEYCODE_WAKEUP)
 
     finished_event.wait(timeout=1800)  # safety cap - never wait forever
 
-    if we_woke_it:
-        _adb(ip, "shell", "input", "keyevent", _KEYCODE_SLEEP)
+    for ip in ips:
+        if woke.get(ip):
+            _adb(ip, "shell", "input", "keyevent", _KEYCODE_SLEEP)

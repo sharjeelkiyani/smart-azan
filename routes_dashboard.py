@@ -235,7 +235,8 @@ def integrations_page():
                 cfg["fully_kiosk_password"] = new_pw
 
             cfg["adb_tv_enabled"] = request.form.get("adb_tv_enabled") == "on"
-            cfg["adb_tv_ip"] = (request.form.get("adb_tv_ip") or "").strip()
+            cfg["adb_tv_ips"] = (request.form.get("adb_tv_ips") or "").strip()
+            cfg.pop("adb_tv_ip", None)
 
         _save(cfg)
         flash("Integration settings saved.", "success")
