@@ -51,6 +51,7 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Log.d("SmartAzanTV", "onCreate")
 
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         hideSystemUi()
@@ -98,9 +99,18 @@ class MainActivity : Activity() {
                 description: String?,
                 failingUrl: String?
             ) {
+                Log.d("SmartAzanTV", "onReceivedError: code=$errorCode desc=$description url=$failingUrl")
                 // Covers launching at boot before the network/server is
                 // actually reachable yet - just keep retrying.
                 webView.postDelayed({ loadConfiguredUrl() }, 5000)
+            }
+
+            override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                Log.d("SmartAzanTV", "onPageStarted: $url")
+            }
+
+            override fun onPageFinished(view: WebView?, url: String?) {
+                Log.d("SmartAzanTV", "onPageFinished: $url")
             }
         }
 
@@ -179,7 +189,9 @@ class MainActivity : Activity() {
 
     private fun loadConfiguredUrl() {
         val base = prefs.getString("server_url", null) ?: return
-        webView.loadUrl(base.trimEnd('/') + "/tv-display")
+        val url = base.trimEnd('/') + "/tv-display"
+        Log.d("SmartAzanTV", "loadConfiguredUrl: $url")
+        webView.loadUrl(url)
     }
 
     private fun promptForUrl() {
