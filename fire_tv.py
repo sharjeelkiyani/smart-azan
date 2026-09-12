@@ -19,9 +19,16 @@ import urllib.request
 _REQUEST_TIMEOUT = 3
 _ADB_TIMEOUT = 10
 
-# Standard Android keycodes - not Fire-TV-specific, work on any adb-reachable
-# Android/Fire OS device.
-_KEYCODE_WAKEUP = "224"
+# KEYCODE_WAKEUP (224) and KEYCODE_POWER (26) both correctly wake the Fire
+# TV's own Android power state (dumpsys power shows mWakefulness=Awake) but
+# do NOT make it send a real HDMI-CEC power-on to the TV - confirmed live,
+# TV screen stayed off both times despite the device itself waking up.
+# KEYCODE_HOME (3) is what Fire TV Cube's own remote uses, and it does
+# trigger a real CEC exchange (<Give Device Power Status> -> TV replies
+# transitioning-to-on, then on -> Fire TV sends <Active Source>) which
+# actually turns the physical screen on. KEYCODE_SLEEP (223) is unaffected
+# by this - it's the same command a real remote's power-off uses too.
+_KEYCODE_WAKEUP = "3"
 _KEYCODE_SLEEP = "223"
 
 # The TV app doesn't find out the instant azan audio stops on the speaker -
