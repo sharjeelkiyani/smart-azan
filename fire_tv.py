@@ -12,6 +12,7 @@ import re
 import socket
 import subprocess
 import threading
+import time
 import urllib.parse
 import urllib.request
 
@@ -22,6 +23,14 @@ _ADB_TIMEOUT = 10
 # Android/Fire OS device.
 _KEYCODE_WAKEUP = "224"
 _KEYCODE_SLEEP = "223"
+
+# The TV app doesn't find out the instant azan audio stops on the speaker -
+# AzanOverlayService only polls /tv_status every 5s, then has to load the
+# WebView, and is designed to stay up for a while so it's actually seen
+# (its own auto-dismiss is 6 minutes). Sleeping the screen the moment the
+# speaker finishes would cut that off before it ever properly showed -
+# give it this much extra time awake first.
+_POST_AZAN_BUFFER_S = 90
 
 
 def _lan_ip():
@@ -152,6 +161,9 @@ def run_adb_tv_cycle(cfg, finished_event):
             _adb(ip, "shell", "input", "keyevent", _KEYCODE_WAKEUP)
 
     finished_event.wait(timeout=1800)  # safety cap - never wait forever
+
+    if any(woke.values()):
+        time.sleep(_POST_AZAN_BUFFER_S)
 
     for ip in ips:
         if woke.get(ip):

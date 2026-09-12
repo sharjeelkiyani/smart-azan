@@ -16,6 +16,7 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
+import android.util.Log
 import android.view.Gravity
 import android.view.WindowManager
 import android.webkit.SslErrorHandler
@@ -109,6 +110,7 @@ class AzanOverlayService : Service() {
             val json = JSONObject(text)
             val playId = json.optInt("play_id", -1)
             val filename = json.optString("filename", "")
+            Log.d("SmartAzanTV", "poll: play_id=$playId last=$lastPlayId file=$filename foreground=${MainActivity.isForeground}")
 
             if (filename.isNotEmpty() && playId != lastPlayId) {
                 lastPlayId = playId
@@ -121,11 +123,12 @@ class AzanOverlayService : Service() {
                 }
             }
         } catch (e: Exception) {
-            // Server unreachable/slow - just retry on the next tick.
+            Log.d("SmartAzanTV", "poll error: $e")
         }
     }
 
     private fun showOverlay(base: String, filename: String) {
+        Log.d("SmartAzanTV", "showOverlay: canDrawOverlays=${Settings.canDrawOverlays(this)} overlayView=$overlayView")
         if (!Settings.canDrawOverlays(this)) return
         if (overlayView != null) return
 
@@ -177,8 +180,10 @@ class AzanOverlayService : Service() {
             windowManager?.addView(webView, params)
             webView.requestFocus()
             overlayView = webView
+            Log.d("SmartAzanTV", "showOverlay: addView succeeded")
             mainHandler.postDelayed({ removeOverlay() }, OVERLAY_AUTO_DISMISS_MS)
         } catch (e: Exception) {
+            Log.d("SmartAzanTV", "showOverlay: addView failed: $e")
             overlayView = null
         }
     }
