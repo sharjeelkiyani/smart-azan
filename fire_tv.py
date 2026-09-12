@@ -9,11 +9,18 @@ This module only ever wakes the TV and points it at our own /tv-display page -
 it never reaches into Fully Kiosk's settings or anything else.
 """
 import socket
+import subprocess
 import threading
 import urllib.parse
 import urllib.request
 
 _REQUEST_TIMEOUT = 3
+_ADB_TIMEOUT = 10
+
+# Standard Android keycodes - not Fire-TV-specific, work on any adb-reachable
+# Android/Fire OS device.
+_KEYCODE_WAKEUP = "224"
+_KEYCODE_SLEEP = "223"
 
 
 def _lan_ip():
@@ -78,3 +85,53 @@ def notify_display(cfg, audio_filename=None):
         _fk_command(base_url, password, "loadUrl", {"url": display_url})
 
     threading.Thread(target=_run, daemon=True).start()
+
+
+# ---------------------------------------------------------------------
+# ADB-based wake/sleep for a Fire TV running our own native TV app
+# (com.smartazan.tvdisplay) rather than Fully Kiosk. Fire TV Cube typically
+# has HDMI-CEC linked to the actual TV/soundbar, so waking the Fire TV device
+# itself also powers the screen on; sleeping it powers the screen back off.
+# ---------------------------------------------------------------------
+
+def _adb(ip, *args):
+    """Best-effort adb command against <ip>:5555 - reconnects first since a
+    TCP adb session doesn't survive a reboot of either side. Never raises:
+    an unreachable/unauthorized device should just mean "did nothing", not
+    a crash of whatever azan/dua flow called this."""
+    target = f"{ip}:5555"
+    try:
+        subprocess.run(["adb", "connect", target], capture_output=True,
+                        text=True, timeout=_ADB_TIMEOUT)
+        return subprocess.run(["adb", "-s", target] + list(args),
+                               capture_output=True, text=True, timeout=_ADB_TIMEOUT)
+    except Exception as e:
+        print(f"[FireTV ADB] {' '.join(args)} failed: {e}")
+        return None
+
+
+def _adb_is_awake(ip):
+    r = _adb(ip, "shell", "dumpsys", "power")
+    return bool(r) and "mWakefulness=Awake" in (r.stdout or "")
+
+
+def run_adb_tv_cycle(cfg, finished_event):
+    """If enabled and the TV is currently asleep, wake it for azan; once
+    finished_event is set (azan playback on the main speaker has ended),
+    put it back to sleep - but only if *this* call was the one that woke it,
+    so a TV someone is actually watching is never turned off out from under
+    them. Meant to be run in its own background thread, decoupled from the
+    actual azan audio timing - adb round-trips (network + HDMI wake time)
+    must never be able to delay the azan itself."""
+    ip = (cfg.get("adb_tv_ip") or "").strip()
+    if not cfg.get("adb_tv_enabled") or not ip:
+        return
+
+    we_woke_it = not _adb_is_awake(ip)
+    if we_woke_it:
+        _adb(ip, "shell", "input", "keyevent", _KEYCODE_WAKEUP)
+
+    finished_event.wait(timeout=1800)  # safety cap - never wait forever
+
+    if we_woke_it:
+        _adb(ip, "shell", "input", "keyevent", _KEYCODE_SLEEP)

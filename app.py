@@ -362,10 +362,20 @@ def play_audio(filename, event_type="manual", label=None):
     with config_lock:
         cfg_now = load_config()
     fire_tv.notify_display(cfg_now, audio_filename=filename)
+
+    # Wake the Fire TV (if it was asleep) for the duration of this azan/dua,
+    # then put it back to sleep afterward - but only if this call is what
+    # woke it, so a TV someone is actually watching never gets turned off
+    # under them. Runs in its own thread so adb's network/HDMI-wake latency
+    # can never delay the actual azan audio below.
+    tv_finished = threading.Event()
+    threading.Thread(target=fire_tv.run_adb_tv_cycle, args=(cfg_now, tv_finished), daemon=True).start()
+
     with _tv_now_playing_lock:
         _tv_now_playing["filename"] = filename
         _tv_now_playing["play_id"] += 1
     ok = audio_player.play(path, cfg_now)
+    tv_finished.set()
     history_log.log_event(event_type, label or event_type, filename, ok)
     return ok
 

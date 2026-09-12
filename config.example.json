@@ -36,6 +36,8 @@
   "wifi_networks": {},
   "after_azan_dua": "",
   "port": 5050,
+  "adb_tv_enabled": false,
+  "adb_tv_ip": "",
   "snapcast_enabled": false,
   "snapcast_fifo": "/tmp/smartazan.fifo",
   "snapcast_jsonrpc": "http://127.0.0.1:1780/jsonrpc",
