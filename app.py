@@ -734,16 +734,36 @@ tv_http_app.add_url_rule("/audio_file/<path:filename>", view_func=serve_audio_fi
 
 
 def _run_tv_http_mirror():
-    from wsgiref.simple_server import make_server, WSGIRequestHandler
+    from wsgiref.simple_server import make_server, WSGIServer, WSGIRequestHandler
+    from socketserver import ThreadingMixIn
+
+    class _ThreadingWSGIServer(ThreadingMixIn, WSGIServer):
+        # Plain make_server() is single-threaded and blocking - with two (or
+        # more) Fire TVs each polling /tv_status every few seconds, one
+        # connection that never cleanly closes (e.g. a TV that drops off the
+        # network mid-request, with no socket timeout to notice) permanently
+        # wedges that one worker forever, and every other TV starts timing
+        # out too even though nothing is wrong on their end. A thread per
+        # request means one stuck connection can't take the rest down with it.
+        daemon_threads = True
 
     class _QuietHandler(WSGIRequestHandler):
+        # 30s: generous for a page load or /tv_status poll, but still short
+        # enough that a connection to a TV that vanished mid-request gets
+        # reclaimed instead of parking a thread on it indefinitely.
+        timeout = 30
+
         def log_message(self, *args):
             pass  # this gets polled every few seconds - keep it quiet
+
+        def handle(self):
+            self.connection.settimeout(self.timeout)
+            super().handle()
 
     with config_lock:
         port = load_config().get("tv_http_port", 5051)
     try:
-        httpd = make_server("0.0.0.0", port, tv_http_app, handler_class=_QuietHandler)
+        httpd = make_server("0.0.0.0", port, tv_http_app, server_class=_ThreadingWSGIServer, handler_class=_QuietHandler)
         print(f"[TV] plain-HTTP mirror listening on :{port}")
         httpd.serve_forever()
     except Exception as e:
