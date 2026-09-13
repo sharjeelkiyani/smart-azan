@@ -241,6 +241,8 @@ if hasattr(wifi, "start_background_threads"):
 # connected.
 def _bluetooth_autoconnect_loop():
     misses = 0
+    consecutive_failures = 0
+    next_retry_at = 0.0
     while True:
         with config_lock:
             c = load_config()
@@ -249,15 +251,31 @@ def _bluetooth_autoconnect_loop():
         if mac and mode in ("bluetooth", "auto"):
             if audio_player.bluetooth_sink_for_mac(mac):
                 misses = 0
+                consecutive_failures = 0
             else:
                 misses += 1
                 # require two consecutive misses before acting, in case a
                 # sink is just briefly absent right as playback starts/stops
                 if misses >= 2:
-                    print(f"[Bluetooth] {mac} not connected, attempting reconnect…")
-                    bluetooth.ensure_bluetooth_ready()
-                    bluetooth.run_bluetoothctl_cmd(["connect", mac])
                     misses = 0
+                    now = time.monotonic()
+                    if now >= next_retry_at:
+                        print(f"[Bluetooth] {mac} not connected, attempting reconnect…")
+                        bluetooth.ensure_bluetooth_ready()
+                        ok = bluetooth.run_bluetoothctl_cmd(["connect", mac])
+                        if ok:
+                            consecutive_failures = 0
+                        else:
+                            # back off exponentially (cap 20min) instead of
+                            # hammering bluetoothd every ~60s forever - once
+                            # a device is genuinely gone (unplugged, out of
+                            # range, unpaired) that never succeeds anyway,
+                            # and each failed attempt is itself enough load
+                            # on bluetoothd to risk slowing down everything
+                            # else sharing this Pi (this is what caused a
+                            # real TV display outage on 2026-09-13).
+                            consecutive_failures = min(consecutive_failures + 1, 6)
+                            next_retry_at = now + min(30 * (2 ** consecutive_failures), 1200)
 
         # Keep PipeWire/Pulse's *default* sink pointed at whatever
         # audio_player resolves to. Our own playback always targets a

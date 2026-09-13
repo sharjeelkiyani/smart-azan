@@ -180,11 +180,18 @@ def _force_pair_and_connect(mac):
     Tries the reliable sequence for Alexa/Echo:
     - stop scanning (UI may still be polling)
     - ensure controller ready
-    - remove old device
-    - pair
-    - trust
-    - connect (multiple tries, short sleep)
+    - trust + retry connect a few times against the EXISTING pairing
+    - only if all of those fail: remove + pair + connect
     Returns True on success.
+
+    The remove+pair step only works if the Echo is actively in pairing
+    mode ("Alexa, pair") right at that moment - if it isn't, wiping the
+    existing pairing first (the old, unconditional behavior here) turns a
+    merely dropped *connection* into a fully lost *pairing*, requiring the
+    Echo's pairing dance to be repeated from scratch for no benefit. Giving
+    plain reconnect attempts against the existing pairing a real chance
+    first means a normal "briefly out of range" or "still finishing its own
+    reboot" case never has to pay that cost at all.
     """
     import time
 
@@ -194,20 +201,21 @@ def _force_pair_and_connect(mac):
         bluetooth_scanning_enabled = False
 
     ensure_bluetooth_ready()
-
-    # remove old record (this avoids "Already exists" + some busy states)
-    _run_btctl_cmd(["remove", mac])
-
-    # pair (this will fail if Echo is NOT in pairing mode)
-    _run_btctl_cmd(["pair", mac])
-
-    # trust anyway
     _run_btctl_cmd(["trust", mac])
 
-    # try to connect a few times – Echo sometimes needs 2-3 attempts
     for _ in range(4):
-        ok = _run_btctl_cmd(["connect", mac])
-        if ok:
+        if _run_btctl_cmd(["connect", mac]):
+            return True
+        time.sleep(2.5)
+
+    # last resort: the existing pairing itself may be stale/corrupt - only
+    # worth it if the Echo is actually reachable to re-pair with right now.
+    _run_btctl_cmd(["remove", mac])
+    _run_btctl_cmd(["pair", mac])
+    _run_btctl_cmd(["trust", mac])
+
+    for _ in range(4):
+        if _run_btctl_cmd(["connect", mac]):
             return True
         time.sleep(2.5)
 
