@@ -27,6 +27,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     mpg123 \
     ffmpeg \
     mpv \
+    iputils-ping \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
