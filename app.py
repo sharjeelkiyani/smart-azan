@@ -374,6 +374,14 @@ threading.Thread(target=_mosque_import_loop, daemon=True).start()
 _tv_now_playing = {"filename": None, "play_id": 0}
 _tv_now_playing_lock = threading.Lock()
 
+# Serializes the actual audio_player.play() call below - _tv_now_playing_lock
+# only ever protected that bookkeeping dict, not playback itself, so two
+# overlapping play_audio() calls (a manual test racing a real scheduled
+# azan, or any other double-trigger) would previously both reach ffmpeg/
+# paplay at once and mix together audibly instead of one cleanly following
+# the other.
+_playback_lock = threading.Lock()
+
 
 def play_audio(filename, event_type="manual", label=None):
     path = os.path.join(AUDIO_FOLDER, filename)
@@ -392,7 +400,8 @@ def play_audio(filename, event_type="manual", label=None):
     with _tv_now_playing_lock:
         _tv_now_playing["filename"] = filename
         _tv_now_playing["play_id"] += 1
-    ok = audio_player.play(path, cfg_now)
+    with _playback_lock:
+        ok = audio_player.play(path, cfg_now)
     tv_finished.set()
     history_log.log_event(event_type, label or event_type, filename, ok)
     return ok

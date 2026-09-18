@@ -1,0 +1,34 @@
+services:
+  smart-azan:
+    build: .
+    container_name: smart-azan
+    restart: unless-stopped
+    # host networking, not bridge - nmcli/bluetoothctl/adb all need to see the Pi's
+    # real network interfaces and BlueZ/adb device list directly, not a container's
+    # isolated virtual network. This is also why there's no "ports:" section: with
+    # host networking the app's port (5050, from config.json) is already the host's
+    # port, exactly like it was as a systemd service.
+    network_mode: host
+    environment:
+      XDG_RUNTIME_DIR: /run/user/1000
+      PULSE_SERVER: /run/user/1000/pulse/native
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      # System D-Bus - what bluetoothctl actually talks to BlueZ over.
+      - /var/run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket
+      # smarthome's PulseAudio user session - audio_player.py plays through this.
+      - /run/user/1000/pulse:/run/user/1000/pulse
+      # Snapcast's FIFO (audio_player.py's primary playback path, written by
+      # the host's snapserver at /tmp/smartazan.fifo) - the container's own
+      # /tmp is a separate, empty filesystem, so without this mount the FIFO
+      # can never be found no matter how long snapserver has been running.
+      - /tmp:/tmp
+      # The whole project dir as /app, not one mount per state file - app.py saves
+      # config.json via write-to-.tmp-then-os.replace(), which is only atomic within a
+      # single filesystem. Bind-mounting config.json alone puts it on a different mount
+      # than the tmp file (created inside the image's own /app layer), so the rename
+      # fails with "Device or resource busy". Mounting the whole directory keeps every
+      # runtime-written file (config.json, quran_state.json, timetable.csv, audio/
+      # uploads) on the same mount as the code, and also means the image's baked-in
+      # COPY is irrelevant at runtime - you're always running the code on disk here.
+      - .:/app
