@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>{{ label }} - Smart Azan</title>
+  <link rel="stylesheet" href="/static/css/mobile.css" />
+  <style>
+    body { display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+    .play-card {
+      width: 100%; max-width: 360px; margin: 16px; padding: 32px 28px;
+      border-radius: 16px; background: var(--card-bg, #fff);
+      box-shadow: 0 8px 30px rgba(0,0,0,.12);
+      text-align: center;
+    }
+    .play-card .brand-icon { font-size: 40px; display: block; margin-bottom: 8px; }
+    .play-card h1 { font-size: 22px; margin: 0 0 20px; }
+    .play-card button {
+      width: 100%; padding: 14px; font-size: 16px; font-weight: 600;
+      border: none; border-radius: 10px; background: #0b6e4f; color: #fff; cursor: pointer;
+      margin-top: 8px;
+    }
+    .play-card .status { color: #667085; font-size: 14px; margin-top: 14px; }
+  </style>
+</head>
+<body>
+  <div class="play-card">
+    <span class="brand-icon">🕌</span>
+    <h1>{{ label }}</h1>
+    <audio id="azan-audio" src="/audio_file/{{ filename }}" preload="auto"></audio>
+    <button type="button" id="play-btn">▶ Play</button>
+    <p class="status" id="play-status">Starting automatically…</p>
+  </div>
+  <script>
+    const audio = document.getElementById('azan-audio');
+    const status = document.getElementById('play-status');
+    const btn = document.getElementById('play-btn');
+
+    // Opening this page is itself the result of a notification tap (a user
+    // gesture), so autoplay-with-sound is usually allowed here even though
+    // it wouldn't be on a cold page load - but some browsers (notably iOS
+    // Safari) don't carry that gesture across the navigation, so the tap
+    // button is the guaranteed fallback either way.
+    audio.play().then(() => {
+      status.textContent = 'Playing…';
+    }).catch(() => {
+      status.textContent = 'Tap Play to start.';
+    });
+
+    btn.addEventListener('click', () => {
+      audio.currentTime = 0;
+      audio.play();
+      status.textContent = 'Playing…';
+    });
+    audio.addEventListener('ended', () => { status.textContent = 'Finished.'; });
+  </script>
+</body>
+</html>

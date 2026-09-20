@@ -8,6 +8,7 @@ import time
 from datetime import datetime, timedelta
 
 import hmac
+from urllib.parse import quote
 
 from flask import Flask, render_template, request, send_from_directory, session, redirect, url_for
 
@@ -22,6 +23,7 @@ import history_log
 import islamic_utils
 import quran_player
 import fire_tv
+import push_notifications
 
 # ----------------- constants -----------------
 AUDIO_FOLDER = "audio"
@@ -539,15 +541,41 @@ def scheduler():
                                             azan_file = current_cfg["azan_audio_per_prayer"].get(
                                                 prayer, current_cfg["azan_audio"]
                                             )
+                                            played_events.add(eid)
+                                            # Push fires *before* play_audio(), not after - play_audio()
+                                            # blocks synchronously for the entire length of the azan
+                                            # recording, so sending the push afterward meant a phone
+                                            # notification arrived minutes late, well after the TV/
+                                            # speaker had already finished.
+                                            if current_cfg.get("notifications_enabled"):
+                                                push_notifications.send_to_all(
+                                                    f"{prayer} Azan", f"It's time for {prayer} prayer.",
+                                                    tag=f"azan-{prayer}",
+                                                    play_url=f"/play_azan?file={quote(azan_file)}&label={quote(prayer + ' Azan')}",
+                                                )
                                             print(f"[Scheduler] Playing {prayer} azan ({azan_file})")
                                             play_audio(azan_file, "azan", f"{prayer} azan")
-                                            played_events.add(eid)
 
                                             # after-azan dua
                                             after_dua = (current_cfg.get("after_azan_dua") or "").strip()
                                             if after_dua:
                                                 print(f"[Scheduler] Playing after-azan dua ({after_dua})")
                                                 play_audio(after_dua, "dua", f"Dua after {prayer} azan")
+
+                                        # reminder before azan - independent of the azan trigger above,
+                                        # since it fires at a different point in time entirely (unless
+                                        # reminder_minutes_before_azan is 0, in which case it's a no-op).
+                                        reminder_min = int(current_cfg.get("reminder_minutes_before_azan", 0) or 0)
+                                        if reminder_min > 0 and current_cfg.get("notifications_enabled"):
+                                            reminder_eid = f"reminder_{prayer}_{current_minute_str}"
+                                            reminder_dt = pt_dt - timedelta(minutes=reminder_min)
+                                            if abs((reminder_dt - now).total_seconds()) < 30 and reminder_eid not in played_events:
+                                                played_events.add(reminder_eid)
+                                                push_notifications.send_to_all(
+                                                    f"{prayer} Azan Reminder",
+                                                    f"{prayer} azan in {reminder_min} minutes.",
+                                                    tag=f"reminder-{prayer}",
+                                                )
                                     except Exception as e:
                                         print(f"[Scheduler] azan time parse error {prayer} ({pt}):", e)
 
@@ -735,6 +763,26 @@ def _ntp_status():
         return None
 
 
+# ----------------- web push -----------------
+@app.route("/push/vapid_public_key")
+def push_vapid_public_key():
+    return push_notifications.get_public_key_b64url()
+
+
+@app.route("/push/subscribe", methods=["POST"])
+def push_subscribe():
+    push_notifications.add_subscription(request.get_json(force=True))
+    return "", 204
+
+
+@app.route("/push/unsubscribe", methods=["POST"])
+def push_unsubscribe():
+    endpoint = (request.get_json(force=True) or {}).get("endpoint")
+    if endpoint:
+        push_notifications.remove_subscription(endpoint)
+    return "", 204
+
+
 # ----------------- index / overview dashboard -----------------
 @app.route("/")
 def index():
@@ -823,6 +871,20 @@ def serve_audio_file(filename):
     """Raw audio bytes for the TV display's <audio> tag - send_from_directory
     already guards against path traversal (e.g. ../../etc/passwd)."""
     return send_from_directory(AUDIO_FOLDER, filename)
+
+
+@app.route("/play_azan")
+def play_azan_page():
+    """Landing page opened by tapping a push notification, so the azan can
+    actually be heard on a phone that's away from the Pi (a push event
+    itself can't play audio - browsers only allow that in response to a
+    user gesture, and a notification tap counts as one). os.path.basename
+    strips any path components a tampered query string might add, then
+    send_from_directory in serve_audio_file() re-validates it against
+    AUDIO_FOLDER."""
+    filename = os.path.basename(request.args.get("file", ""))
+    label = request.args.get("label") or "Azan"
+    return render_template("play_azan.html", filename=filename, label=label)
 
 
 # ----------------- plain-HTTP mirror, TV routes only -----------------

@@ -16,6 +16,15 @@ history.jsonl
 cert.pem
 cert.key
 
+# Web Push VAPID private key - identifies this server to push services
+# (generated once per install; the public half is derived from it at
+# runtime, never stored separately).
+vapid_private.pem
+
+# Saved push subscriptions - one per browser/device that enabled
+# notifications, written by push_notifications.py at runtime.
+push_subscriptions.json
+
 # Flask session signing key + admin login password - generate per install,
 # never commit (docker-compose.yml reads these via variable substitution).
 .env
@@ -23,3 +32,7 @@ __pycache__/
 *.pyc
 venv/
 *.log
+
+# Separate, paused Samsung Tizen TV app experiment - large Tizen Studio
+# build output, not part of this Flask app's deployment.
+samsung-tv-app/

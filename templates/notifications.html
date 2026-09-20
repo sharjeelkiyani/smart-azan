@@ -22,22 +22,51 @@
       <button class="btn primary" type="submit" style="margin-top:14px">Save</button>
     </form>
     <p class="muted" style="margin-top:14px">
-      Browser notifications fire while this page/app is open in a tab, based on today's timetable -
-      they won't wake a closed browser in the background. For a always-on reminder, keep this page
-      open on a tablet/screen near your speaker.
+      These are real push notifications - once enabled on a device, azan and reminder alerts arrive
+      even if the app/browser isn't open, same as any other app's notifications.
     </p>
-    <button class="btn secondary" type="button" id="enable-browser-notif">🔔 Enable browser notifications on this device</button>
+    <button class="btn secondary" type="button" id="enable-browser-notif">🔔 Enable notifications on this device</button>
     <p class="muted" id="notif-hint" style="margin-top:8px"></p>
   </section>
 {% endblock %}
 
 {% block body_extra %}
 <script>
+  function urlBase64ToUint8Array(base64) {
+    const padding = '='.repeat((4 - base64.length % 4) % 4);
+    const raw = atob((base64 + padding).replace(/-/g, '+').replace(/_/g, '/'));
+    return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+  }
+
   document.getElementById('enable-browser-notif').addEventListener('click', async () => {
     const hint = document.getElementById('notif-hint');
-    if (!('Notification' in window)) { hint.textContent = 'This browser does not support notifications.'; return; }
-    const perm = await Notification.requestPermission();
-    hint.textContent = perm === 'granted' ? 'Notifications enabled on this device.' : 'Permission not granted.';
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      hint.textContent = 'This browser does not support push notifications.';
+      return;
+    }
+    try {
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') { hint.textContent = 'Permission not granted.'; return; }
+
+      const reg = await navigator.serviceWorker.ready;
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        const keyRes = await fetch('/push/vapid_public_key');
+        const vapidKey = await keyRes.text();
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(vapidKey),
+        });
+      }
+      await fetch('/push/subscribe', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(sub.toJSON()),
+      });
+      hint.textContent = 'Notifications enabled on this device.';
+    } catch (err) {
+      hint.textContent = 'Could not enable notifications: ' + err.message;
+    }
   });
 </script>
 {% endblock %}

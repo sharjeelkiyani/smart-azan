@@ -24,7 +24,8 @@
                 <td>{{ row.get('Iqama_' ~ p, '-') }}</td>
                 <td>{{ ap.get(p, cfg.get('azan_audio','')) or '-' }}</td>
                 <td>
-                  <form method="post" action="/manual_play_azan">
+                  <form method="post" action="/manual_play_azan"
+                        onsubmit="this.querySelector('button').disabled=true">
                     <input type="hidden" name="prayer" value="{{ p }}">
                     <button class="btn small" type="submit">Play</button>
                   </form>

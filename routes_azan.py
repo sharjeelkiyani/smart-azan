@@ -4,6 +4,7 @@ import re
 import csv
 import subprocess
 from datetime import datetime
+from urllib.parse import quote
 
 from flask import (
     Blueprint, render_template, request, redirect,
@@ -16,6 +17,7 @@ import bluetooth
 import audio_player
 import history_log
 import quran_player
+import push_notifications
 
 bp = Blueprint("azan", __name__)
 
@@ -206,6 +208,17 @@ def manual_play_azan():
             current_cfg = _load_config()
             audio_file = current_cfg["azan_audio_per_prayer"].get(
                 prayer, current_cfg["azan_audio"]
+            )
+        # Push fires *before* _play_audio(), which blocks synchronously for
+        # the whole length of the azan recording - sending it afterward
+        # meant the phone notification arrived minutes late, well after the
+        # TV/speaker had already finished (this is what looked like "can't
+        # hear it on mobile").
+        if current_cfg.get("notifications_enabled"):
+            push_notifications.send_to_all(
+                f"{prayer} Azan", f"It's time for {prayer} prayer.",
+                tag=f"azan-{prayer}",
+                play_url=f"/play_azan?file={quote(audio_file)}&label={quote(prayer + ' Azan')}",
             )
         _play_audio(audio_file, "manual", f"{prayer} azan (manual test)")
         flash(f"{prayer} azan played.", "success")
