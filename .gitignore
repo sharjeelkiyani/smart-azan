@@ -15,6 +15,10 @@ history.jsonl
 # regenerate per install with gen_https_cert.sh
 cert.pem
 cert.key
+
+# Flask session signing key + admin login password - generate per install,
+# never commit (docker-compose.yml reads these via variable substitution).
+.env
 __pycache__/
 *.pyc
 venv/

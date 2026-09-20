@@ -7,7 +7,9 @@ import threading
 import time
 from datetime import datetime, timedelta
 
-from flask import Flask, render_template, request, send_from_directory
+import hmac
+
+from flask import Flask, render_template, request, send_from_directory, session, redirect, url_for
 
 # local modules
 import wifi
@@ -29,6 +31,87 @@ TIMETABLE_FILE = "timetable.csv"
 # ----------------- flask -----------------
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "change_this_secret_in_production")
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=90)
+
+
+# ----------------- auth -----------------
+# Opt-in via SMART_AZAN_ADMIN_PASSWORD: unset (the default, matching every
+# install before this) means auth is skipped entirely - LAN-only installs
+# that never intended to expose this beyond their own network shouldn't
+# suddenly need a password. Once this app is put behind a public hostname
+# (see nginx/DNS setup), setting that env var is what actually locks it
+# down - every route on *this* app (dashboard, azan settings, wifi, etc.)
+# requires a login first.
+#
+# tv_http_app (a separate Flask app on its own port - see near the bottom
+# of this file) is untouched by any of this and stays open: it's polled
+# directly by Fire TV/Android TV display clients on the LAN, which have no
+# way to "log in", and it only ever exposes the read-only display/status
+# routes anyway, never anything that changes configuration.
+ADMIN_PASSWORD = os.environ.get("SMART_AZAN_ADMIN_PASSWORD")
+app.config["SMART_AZAN_ADMIN_PASSWORD_SET"] = bool(ADMIN_PASSWORD)
+
+_login_attempts = {}  # ip -> (fail_count, locked_until_monotonic)
+_LOGIN_MAX_ATTEMPTS = 5
+_LOGIN_LOCKOUT_S = 15 * 60
+
+
+def _client_ip():
+    # X-Real-IP is set by our own nginx reverse proxy (see deploy notes) -
+    # trusted here specifically because tv_http_app/the raw app port are
+    # never directly internet-facing, only reachable through that proxy or
+    # the LAN, so this can't be spoofed by an actual internet client.
+    return request.headers.get("X-Real-IP") or request.remote_addr or "unknown"
+
+
+@app.before_request
+def _require_login():
+    if not ADMIN_PASSWORD:
+        return
+    if request.endpoint in ("login", "static"):
+        return
+    if not session.get("authed"):
+        return redirect(url_for("login", next=request.path))
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if not ADMIN_PASSWORD:
+        return redirect(url_for("index"))
+
+    ip = _client_ip()
+    fail_count, locked_until = _login_attempts.get(ip, (0, 0))
+    now = time.monotonic()
+    error = None
+
+    if now < locked_until:
+        error = f"Too many attempts - try again in {int(locked_until - now)}s"
+    elif request.method == "POST":
+        submitted = request.form.get("password", "")
+        # constant-time compare - a public login endpoint is exactly the
+        # case a timing side-channel on string equality actually matters for
+        if hmac.compare_digest(submitted, ADMIN_PASSWORD):
+            session.clear()
+            session["authed"] = True
+            session.permanent = True
+            _login_attempts.pop(ip, None)
+            next_url = request.args.get("next") or url_for("index")
+            return redirect(next_url)
+        fail_count += 1
+        if fail_count >= _LOGIN_MAX_ATTEMPTS:
+            _login_attempts[ip] = (fail_count, now + _LOGIN_LOCKOUT_S)
+            error = f"Too many attempts - try again in {_LOGIN_LOCKOUT_S // 60} minutes"
+        else:
+            _login_attempts[ip] = (fail_count, 0)
+            error = "Incorrect password"
+
+    return render_template("login.html", error=error)
+
+
+@app.route("/logout", methods=["POST"])
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
 
 # shared lock + config
 config_lock = threading.Lock()

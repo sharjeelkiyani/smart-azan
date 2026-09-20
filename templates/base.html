@@ -44,6 +44,11 @@
     <a href="/notifications" class="nav-item" data-path="/notifications">🔔<span>Notifications</span></a>
     <a href="/integrations" class="nav-item" data-path="/integrations">🔌<span>Integrations</span></a>
     <a href="/settings" class="nav-item" data-path="/settings">⚙️<span>Settings</span></a>
+    {% if config.get("SMART_AZAN_ADMIN_PASSWORD_SET") %}
+    <form action="/logout" method="post" style="margin:0">
+      <button type="submit" class="nav-item" style="width:100%;text-align:left;background:none;border:none;font:inherit;cursor:pointer">🚪<span>Sign out</span></button>
+    </form>
+    {% endif %}
     <div class="theme-modes" id="theme-modes-mobile" style="margin:14px">
       <button type="button" data-mode="light">☀️</button>
       <button type="button" data-mode="dark">🌙</button>

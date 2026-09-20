@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Sign in - Smart Azan</title>
+  <link rel="stylesheet" href="/static/css/mobile.css" />
+  <style>
+    body { display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+    .login-card {
+      width: 100%; max-width: 360px; margin: 16px; padding: 32px 28px;
+      border-radius: 16px; background: var(--card-bg, #fff);
+      box-shadow: 0 8px 30px rgba(0,0,0,.12);
+      text-align: center;
+    }
+    .login-card .brand-icon { font-size: 40px; display: block; margin-bottom: 8px; }
+    .login-card h1 { font-size: 20px; margin: 0 0 24px; }
+    .login-card .accent { color: #0b6e4f; }
+    .login-card input[type="password"] {
+      width: 100%; box-sizing: border-box; padding: 12px 14px; font-size: 16px;
+      border: 1px solid #d0d5dd; border-radius: 10px; margin-bottom: 16px;
+    }
+    .login-card button {
+      width: 100%; padding: 12px; font-size: 16px; font-weight: 600;
+      border: none; border-radius: 10px; background: #0b6e4f; color: #fff; cursor: pointer;
+    }
+    .login-card .error { color: #b91c1c; font-size: 14px; margin: -8px 0 16px; }
+  </style>
+</head>
+<body>
+  <form class="login-card" method="post">
+    <span class="brand-icon">🕌</span>
+    <h1>Smart <span class="accent">Azan</span></h1>
+    {% if error %}<div class="error">{{ error }}</div>{% endif %}
+    <input type="password" name="password" placeholder="Password" autofocus required>
+    <button type="submit">Sign in</button>
+  </form>
+</body>
+</html>
