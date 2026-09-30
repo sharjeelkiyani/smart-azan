@@ -1,0 +1,18 @@
+[Unit]
+Description=Smart Azan TV wake helper (LAN-local adb, called remotely over Tailscale)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=smarthome
+WorkingDirectory=/home/smarthome/apps/smart_azan_final
+Environment="ADB_TV_ENABLED=true"
+Environment="ADB_TV_IPS=192.168.50.129, 192.168.50.172"
+Environment="PORT=5199"
+ExecStart=/usr/bin/python3 /home/smarthome/apps/smart_azan_final/tv_wake_helper.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

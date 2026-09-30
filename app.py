@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 
 import hmac
 from urllib.parse import quote
+import urllib.request
 
 from flask import Flask, render_template, request, send_from_directory, session, redirect, url_for
 
@@ -468,6 +469,23 @@ _tv_now_playing_lock = threading.Lock()
 _playback_lock = threading.Lock()
 
 
+def _remote_tv_wake_cycle(base_url, finished_event):
+    """Same wake-now/sleep-when-finished contract as fire_tv.run_adb_tv_cycle(),
+    but delegates the actual adb work to tv_wake_helper.py running on a
+    machine that's actually on the Fire TVs' LAN - this app's own host may be
+    on a different subnet with no route to them at all (adb would otherwise
+    hang until gunicorn's worker timeout kills the request)."""
+    try:
+        urllib.request.urlopen(urllib.request.Request(f"{base_url}/wake", method="POST"), timeout=5)
+    except Exception as e:
+        print(f"[FireTV] remote wake-helper /wake failed: {e}")
+    finished_event.wait()
+    try:
+        urllib.request.urlopen(urllib.request.Request(f"{base_url}/sleep", method="POST"), timeout=5)
+    except Exception as e:
+        print(f"[FireTV] remote wake-helper /sleep failed: {e}")
+
+
 def play_audio(filename, event_type="manual", label=None):
     path = os.path.join(AUDIO_FOLDER, filename)
     with config_lock:
@@ -479,8 +497,17 @@ def play_audio(filename, event_type="manual", label=None):
     # woke it, so a TV someone is actually watching never gets turned off
     # under them. Runs in its own thread so adb's network/HDMI-wake latency
     # can never delay the actual azan audio below.
+    #
+    # tv_wake_helper_url, when set, means this app's own host can't reach
+    # the TVs directly (different subnet) - the wake/sleep calls go to a
+    # tiny helper service on a machine that can, over HTTP, instead of
+    # running adb locally.
     tv_finished = threading.Event()
-    threading.Thread(target=fire_tv.run_adb_tv_cycle, args=(cfg_now, tv_finished), daemon=True).start()
+    wake_helper_url = (cfg_now.get("tv_wake_helper_url") or "").rstrip("/")
+    if wake_helper_url:
+        threading.Thread(target=_remote_tv_wake_cycle, args=(wake_helper_url, tv_finished), daemon=True).start()
+    else:
+        threading.Thread(target=fire_tv.run_adb_tv_cycle, args=(cfg_now, tv_finished), daemon=True).start()
 
     with _tv_now_playing_lock:
         _tv_now_playing["filename"] = filename
