@@ -30,6 +30,12 @@ import push_notifications
 AUDIO_FOLDER = "audio"
 CONFIG_FILE = "config.json"
 TIMETABLE_FILE = "timetable.csv"
+# The Android TV app's CI workflow (android-tv-app/.github/workflows/
+# build-android-tv.yml) publishes every build to this fixed, rolling
+# GitHub Release tag - a plain public URL, unlike a workflow artifact
+# which needs a logged-in GitHub session. /download-tv-app below just
+# password-gates a redirect to it rather than hosting the APK itself.
+TV_APP_RELEASE_URL = "https://github.com/sharjeelkiyani/smart-azan/releases/download/tv-app-latest/app-debug.apk"
 
 # ----------------- flask -----------------
 app = Flask(__name__)
@@ -71,7 +77,7 @@ def _client_ip():
 def _require_login():
     if not ADMIN_PASSWORD:
         return
-    if request.endpoint in ("login", "static"):
+    if request.endpoint in ("login", "static", "download_tv_app"):
         return
     if not session.get("authed"):
         return redirect(url_for("login", next=request.path))
@@ -908,6 +914,19 @@ def serve_audio_file(filename):
     """Raw audio bytes for the TV display's <audio> tag - send_from_directory
     already guards against path traversal (e.g. ../../etc/passwd)."""
     return send_from_directory(AUDIO_FOLDER, filename)
+
+
+@app.route("/download-tv-app")
+def download_tv_app():
+    """Lets the Fire TV's own browser (Silk) or a sideloading tool like
+    Downloader fetch the native TV app directly by URL - neither carries
+    the site's session cookie, so this checks its own ?password= param
+    instead of relying on the normal login system (see the endpoint-name
+    exemption in _require_login above). Installs are meant to be genuinely
+    easy: whoever has the admin password can grab the APK, nothing more."""
+    if ADMIN_PASSWORD and not hmac.compare_digest(request.args.get("password", ""), ADMIN_PASSWORD):
+        return "Wrong or missing ?password=", 403
+    return redirect(TV_APP_RELEASE_URL)
 
 
 @app.route("/play_azan")

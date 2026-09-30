@@ -43,6 +43,12 @@ class MainActivity : Activity() {
         // on screen handling the same event via its own WebView/JS.
         @Volatile
         var isForeground = false
+
+        // Baked in so a fresh install just works with zero setup - this
+        // build is dedicated to this one server. Anyone who needs a
+        // different server can still override it via the long-press-Back
+        // dialog (promptForUrl()); this only supplies the initial value.
+        private const val DEFAULT_SERVER_URL = "https://smartazan.ssmarttec.com:8443"
     }
 
     private lateinit var webView: WebView
@@ -116,10 +122,9 @@ class MainActivity : Activity() {
 
         val savedUrl = prefs.getString("server_url", null)
         if (savedUrl.isNullOrBlank()) {
-            promptForUrl()
-        } else {
-            loadConfiguredUrl()
+            prefs.edit().putString("server_url", DEFAULT_SERVER_URL).apply()
         }
+        loadConfiguredUrl()
 
         maybeRequestOverlayPermission()
     }
