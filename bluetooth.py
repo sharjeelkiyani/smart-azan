@@ -2,6 +2,7 @@
 import threading
 import re
 import subprocess
+import time
 from flask import Blueprint, jsonify, request
 
 bp = Blueprint("bluetooth", __name__)
@@ -47,17 +48,33 @@ def _run_btctl_script(lines, timeout=15):
 
     # we prepend 'agent off' so we can safely register again
     all_lines = ["agent off"] + list(lines) + ["quit"]
-    script = "\n".join(all_lines)
 
+    # Writing the whole script as one input= string (the old approach) lets
+    # the OS pipe every line into bluetoothctl's stdin essentially at once -
+    # on a fast enough host, "agent NoInputNoOutput" can be sent before
+    # "agent off"'s own D-Bus unregister call has actually completed,
+    # causing a spurious "Failed to register agent object". This never
+    # showed up on a slower Pi, which incidentally gave each D-Bus
+    # round-trip enough time to finish between lines - a faster machine
+    # exposes the race instead of avoiding it. Writing line-by-line with a
+    # small pause gives each command's D-Bus call room to land first.
     try:
-        p = subprocess.run(
+        proc = subprocess.Popen(
             ["bluetoothctl"],
-            input=script,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             text=True,
-            capture_output=True,
-            timeout=timeout,
         )
-        out = (p.stdout or "") + (p.stderr or "")
+        try:
+            for line in all_lines:
+                proc.stdin.write(line + "\n")
+                proc.stdin.flush()
+                time.sleep(0.3)
+            out, _ = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            out, _ = proc.communicate()
         if out.strip():
             print("[bluetoothctl]", out.strip())
         return out
