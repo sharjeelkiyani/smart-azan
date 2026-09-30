@@ -335,7 +335,17 @@ def _bluetooth_autoconnect_loop():
         mac = c.get("bluetooth_mac")
         mode = (c.get("audio_output_mode") or "auto").lower()
         if mac and mode in ("bluetooth", "auto"):
-            if audio_player.bluetooth_sink_for_mac(mac):
+            # Check BlueZ's own connection state first, not just whether a
+            # PulseAudio sink object currently exists for it - the sink can
+            # flicker/lag briefly (e.g. right as its module reloads) even
+            # while the device is genuinely still connected at the BlueZ
+            # level. Treating that flicker as "disconnected" triggered a
+            # redundant bluetoothctl "connect" against an already-connected
+            # device every ~60s, which made bluetoothd re-negotiate every
+            # profile it advertises (including one that always failed) -
+            # showing up as constant, harmless-but-alarming connect/
+            # disconnect churn in the logs.
+            if bluetooth.is_connected(mac) or audio_player.bluetooth_sink_for_mac(mac):
                 misses = 0
                 consecutive_failures = 0
             else:
