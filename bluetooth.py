@@ -192,6 +192,55 @@ def is_connected(mac):
     return "Connected: yes" in _bt_info(mac)
 
 
+def _scan_then_pair(mac, scan_seconds=8):
+    """A fresh 'pair <mac>' in its own bluetoothctl invocation almost always
+    fails with 'Device ... not available' - each _run_btctl_script() call is
+    a brand new bluetoothctl process with no record of a device it hasn't
+    itself just seen, and a previous call's 'scan on' stops discovery the
+    moment that process's own 'quit' runs (often well under a second later).
+    Scanning and pairing have to happen as commands within one continuous
+    session instead, with a real gap between them for the device to
+    actually turn up. Returns True if bluetoothctl reported pairing success."""
+    out_chunks = []
+    proc = None
+    try:
+        proc = subprocess.Popen(
+            ["bluetoothctl"],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        )
+
+        def _reader():
+            for line in proc.stdout:
+                out_chunks.append(line)
+
+        threading.Thread(target=_reader, daemon=True).start()
+
+        def _send(cmd, delay=0.3):
+            proc.stdin.write(cmd + "\n")
+            proc.stdin.flush()
+            time.sleep(delay)
+
+        _send("agent off")
+        _send("agent NoInputNoOutput")
+        _send("default-agent")
+        _send("power on")
+        _send("scan on")
+        time.sleep(scan_seconds)
+        _send("pair " + mac, delay=3)
+        _send("scan off")
+        _send("quit")
+        proc.wait(timeout=15)
+    except Exception as e:
+        print("[bluetoothctl] scan+pair error:", e)
+    finally:
+        if proc and proc.poll() is None:
+            proc.kill()
+    out = "".join(out_chunks)
+    if out.strip():
+        print("[bluetoothctl]", out.strip())
+    return "Pairing successful" in out
+
+
 def _force_pair_and_connect(mac):
     """
     Tries the reliable sequence for Alexa/Echo:
@@ -227,8 +276,11 @@ def _force_pair_and_connect(mac):
 
     # last resort: the existing pairing itself may be stale/corrupt - only
     # worth it if the Echo is actually reachable to re-pair with right now.
+    # Needs a real scan first (see _scan_then_pair) - a bare 'pair' in its
+    # own bluetoothctl session always fails with 'not available' otherwise.
     _run_btctl_cmd(["remove", mac])
-    _run_btctl_cmd(["pair", mac])
+    if not _scan_then_pair(mac):
+        return False
     _run_btctl_cmd(["trust", mac])
 
     for _ in range(4):
