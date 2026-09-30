@@ -77,7 +77,13 @@ def _client_ip():
 def _require_login():
     if not ADMIN_PASSWORD:
         return
-    if request.endpoint in ("login", "static", "download_tv_app"):
+    # tv_status is polled by the Android TV app's background service via a
+    # bare HttpURLConnection, not the app's WebView - it never carries the
+    # session cookie a browser would, so requiring login here meant every
+    # poll silently landed on the login page's HTML instead of real JSON
+    # and was dropped, and the app never noticed a scheduled azan at all.
+    # Just play-state (play_id/filename), not worth gating behind login.
+    if request.endpoint in ("login", "static", "download_tv_app", "tv_status"):
         return
     if not session.get("authed"):
         return redirect(url_for("login", next=request.path))
