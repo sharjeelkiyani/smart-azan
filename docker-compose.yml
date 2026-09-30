@@ -13,12 +13,24 @@ services:
       XDG_RUNTIME_DIR: /run/user/1000
       PULSE_SERVER: /run/user/1000/pulse/native
       PYTHONUNBUFFERED: "1"
+      # The image has no tzdata package, so this alone wouldn't apply the
+      # right BST/GMT offset - it's set for tools that check the env var
+      # first, but /etc/localtime below (mounted from the host, which is
+      # already correctly configured) is what actually makes datetime.now()
+      # inside the container follow Europe/London instead of defaulting to
+      # UTC - the cause of the whole app's clock/scheduler running an hour
+      # behind during BST.
+      TZ: Europe/London
       # From .env (gitignored) - see login system in app.py. Unset/blank
       # means no login is required at all, matching every install before
       # this - only set once this app sits behind a public hostname.
       FLASK_SECRET_KEY: ${FLASK_SECRET_KEY:-}
       SMART_AZAN_ADMIN_PASSWORD: ${SMART_AZAN_ADMIN_PASSWORD:-}
     volumes:
+      # Share the host's already-correct timezone (Europe/London, handles
+      # BST/GMT automatically) instead of the container defaulting to UTC.
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
       # System D-Bus - what bluetoothctl actually talks to BlueZ over.
       - /var/run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket
       # smarthome's PulseAudio user session - audio_player.py plays through this.
