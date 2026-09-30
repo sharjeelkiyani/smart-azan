@@ -209,9 +209,27 @@ def _scan_then_pair(mac, scan_seconds=8):
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
         )
 
+        # bluetoothctl's interactive shell shows "Authorize service ...
+        # (yes/no):" as a real prompt on pairing, no matter what capability
+        # the registered agent claims - "NoInputNoOutput" only auto-accepts
+        # the pairing step itself, not this separate service-authorization
+        # one. Left unanswered, it's silently dropped once the process
+        # quits, and unlike a plain failed connection, that seems to leave
+        # the A2DP profile itself permanently unauthorized for this device -
+        # every future connect attempt then fails with
+        # br-connection-profile-unavailable even after the device is marked
+        # trusted, until it's removed and re-paired with this actually
+        # answered. So the reader watches for that exact prompt live and
+        # answers it the moment it appears, instead of just logging output.
         def _reader():
             for line in proc.stdout:
                 out_chunks.append(line)
+                if "Authorize service" in line or "(yes/no)" in line:
+                    try:
+                        proc.stdin.write("yes\n")
+                        proc.stdin.flush()
+                    except Exception:
+                        pass
 
         threading.Thread(target=_reader, daemon=True).start()
 
@@ -224,9 +242,13 @@ def _scan_then_pair(mac, scan_seconds=8):
         _send("agent NoInputNoOutput")
         _send("default-agent")
         _send("power on")
+        _send("trust " + mac)
         _send("scan on")
         time.sleep(scan_seconds)
         _send("pair " + mac, delay=3)
+        # Give the authorize prompt (if any) time to actually appear and be
+        # answered by the reader thread above before this session ends.
+        time.sleep(2)
         _send("scan off")
         _send("quit")
         proc.wait(timeout=15)
