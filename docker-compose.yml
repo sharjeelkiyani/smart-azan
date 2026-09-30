@@ -9,6 +9,14 @@ services:
     # host networking the app's port (5050, from config.json) is already the host's
     # port, exactly like it was as a systemd service.
     network_mode: host
+    # Ubuntu's default Docker AppArmor profile ("docker-default") blocks a
+    # container's D-Bus "Hello" call to the system bus outright - not an
+    # issue on Raspberry Pi OS, which doesn't enable AppArmor at all, but it
+    # silently breaks every bluetoothctl call on an Ubuntu host otherwise
+    # (confirmed via `apparmor="DENIED" ... member="Hello"` in dmesg).
+    # Unconfining only this container, not Docker/AppArmor host-wide.
+    security_opt:
+      - apparmor:unconfined
     environment:
       XDG_RUNTIME_DIR: /run/user/1000
       PULSE_SERVER: /run/user/1000/pulse/native
