@@ -32,15 +32,28 @@ fi
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$PROJECT_DIR"
+
+# A clear, specific error here beats a confusing mid-script failure if this
+# is accidentally run from the wrong directory, or before cloning at all.
+if [ ! -f docker-compose.yml ] || [ ! -f app.py ]; then
+  echo "error: docker-compose.yml/app.py not found in $PROJECT_DIR." >&2
+  echo "Clone the repo first, then run this script from inside it:" >&2
+  echo "  git clone https://github.com/sharjeelkiyani/smart-azan.git ~/apps/smart_azan_final" >&2
+  echo "  cd ~/apps/smart_azan_final && ./install_docker.sh" >&2
+  exit 1
+fi
+
 THIS_USER="$(whoami)"
 THIS_UID="$(id -u)"
+
+echo "==> Refreshing package index..."
+sudo apt-get update
 
 # ---------------------------------------------------------------------
 # 1. Docker + Compose plugin
 # ---------------------------------------------------------------------
 if ! command -v docker >/dev/null 2>&1; then
   echo "==> Docker not found - installing from Docker's official apt repo..."
-  sudo apt-get update
   sudo apt-get install -y ca-certificates curl gnupg
   sudo install -m 0755 -d /etc/apt/keyrings
   . /etc/os-release
@@ -81,7 +94,8 @@ echo "==> Installing PulseAudio, Bluetooth, and Snapcast packages..."
 sudo apt-get install -y \
   pulseaudio pulseaudio-module-bluetooth \
   bluez bluez-tools \
-  snapserver snapclient
+  snapserver snapclient \
+  openssl
 
 echo "==> Adding $THIS_USER to the audio group (needed to access sound hardware)..."
 sudo usermod -aG audio "$THIS_USER"
