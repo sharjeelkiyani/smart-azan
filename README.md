@@ -19,6 +19,7 @@ can act as its own Wi-Fi hotspot for initial setup.
 - [Alternate: systemd service, no Docker](#alternate-systemd-service-no-docker)
 - [Configuration](#configuration)
 - [Managing the service](#managing-the-service)
+- [Troubleshooting](#troubleshooting)
 
 ## Quick start (Docker)
 
@@ -318,3 +319,117 @@ sudo journalctl -u smart-azan -f
 Web UI: `https://<this-machine's-ip>:5050` (port configurable in Settings;
 see [Opening the web UI](#opening-the-web-ui) above for the HTTPS security
 warning you'll see the first time).
+
+## Troubleshooting
+
+### Docker or the Compose plugin aren't installed
+
+`install_docker.sh` does this automatically - the steps below are the same
+thing done by hand, e.g. if you want to understand what it's doing, or it
+fails partway through and you want to finish manually:
+
+```bash
+# Docker itself:
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl gnupg
+sudo install -m 0755 -d /etc/apt/keyrings
+. /etc/os-release
+curl -fsSL "https://download.docker.com/linux/${ID}/gpg" | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/${ID} ${VERSION_CODENAME} stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list
+sudo apt-get update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+
+# Let your user run docker without sudo (log out/in afterward for this to apply):
+sudo usermod -aG docker "$(whoami)"
+
+# Confirm both are present:
+docker --version
+docker compose version
+```
+
+### Building/starting the container manually
+
+This is all `install_docker.sh` does at the end, once Docker and the host
+audio packages (see [Quick start](#quick-start-docker)) are in place:
+
+```bash
+cd ~/apps/smart_azan_final
+docker compose build
+docker compose up -d
+docker compose logs -f smart-azan   # watch it start; Ctrl+C to stop watching
+```
+
+### "Port already in use" / picking a different port
+
+Smart Azan listens on the port set in `config.json`'s `"port"` field
+(`5050` by default) - since `docker-compose.yml` uses host networking (not a
+`ports:` mapping), this is the one place that controls it. If something
+else on the machine already uses 5050 (common on a shared/test box running
+other services), check what's bound to it first:
+
+```bash
+sudo ss -tlnp | grep 5050
+```
+
+Then change the port:
+
+```bash
+# Edit "port" in config.json to something free, e.g. 5060, then:
+docker compose up -d
+```
+
+The web UI address becomes `https://<this-machine's-ip>:<new-port>` -
+re-run `./gen_https_cert.sh` first if you also need the self-signed cert's
+SAN list regenerated (it isn't port-specific, so this is only needed if the
+cert doesn't already exist yet).
+
+### Bluetooth speaker won't stay connected / keeps "connecting and disconnecting"
+
+Three distinct issues were found getting a Bluetooth speaker (an Echo Show)
+working reliably on Ubuntu, all already handled automatically by
+`install_docker.sh`/`docker-compose.yml` - listed here in case your specific
+environment doesn't match the assumptions they make:
+
+1. **Ubuntu's default Docker AppArmor profile blocks the container's D-Bus
+   access outright**, breaking every `bluetoothctl` call from inside it.
+   Symptom: `dbus[...]: arguments to dbus_connection_get_object_path_data()
+   were incorrect` in `docker logs smart-azan`, or
+   `dmesg | grep apparmor` showing `DENIED ... member="Hello" ...
+   label="docker-default"`. Fixed by `security_opt: [apparmor:unconfined]`
+   in `docker-compose.yml` (already there - not needed on Raspberry Pi OS,
+   which has no AppArmor at all).
+2. **`pulseaudio-module-bluetooth` not installed** means PulseAudio has no
+   A2DP audio profile to offer BlueZ at all. Symptom:
+   `org.bluez.Error.Failed br-connection-profile-unavailable` every time you
+   try to connect. `install_docker.sh` installs this package; if you skipped
+   it, `sudo apt-get install pulseaudio-module-bluetooth` then
+   `systemctl --user restart pulseaudio`.
+3. **PulseAudio's default `exit-idle-time` (20s)** makes the whole daemon
+   exit whenever nothing's actively streaming, tearing down its Bluetooth
+   registration every time - this is what actually looks like random
+   "connecting and disconnecting" even though the speaker itself is fine.
+   Fixed by `exit-idle-time = -1` in `~/.config/pulse/daemon.conf`
+   (`install_docker.sh` writes this for you - it's correct for a dedicated
+   audio server, just not for a desktop session, which is why it isn't
+   PulseAudio's own default).
+
+Separately, a genuinely idle Bluetooth connection (nothing playing) may
+still drop after a short period as the speaker's *own* power-saving
+behavior - that's normal and harmless as long as it reconnects cleanly the
+next time something actually needs to play, which the app's own background
+reconnect loop (`_bluetooth_autoconnect_loop` in `app.py`) handles.
+
+### Fresh pairing fails with "Device ... not available"
+
+A bare `bluetoothctl pair <mac>` in its own session almost always fails
+this way - BlueZ only knows about a device it has itself just *discovered*
+via an active scan in that same session, and a previous scan's discovery
+stops the instant that process exits. Use Settings -> Bluetooth -> Scan,
+then Connect, which runs scan-then-pair as one continuous operation
+(`bluetooth.py`'s `_scan_then_pair()`) rather than two separate ones.
+
+If it's a smart speaker (e.g. an Echo/Alexa device): make sure it's
+actively in its own pairing mode (e.g. say "Alexa, pair") at the moment you
+press Connect - discovery alone doesn't make it accept a new pairing.
