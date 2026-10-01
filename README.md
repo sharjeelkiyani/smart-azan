@@ -1,47 +1,69 @@
 # Smart Azan
 
 A self-hosted Islamic prayer-time (azan) scheduler and player with a web UI,
-built for Raspberry Pi (Zero through 5) and generic Linux. It plays azan,
-iqama, and dua audio at scheduled times over Bluetooth, HDMI, a USB DAC, or a
-3.5mm jack, shows Qibla direction and a prayer calendar, and can act as its
-own Wi-Fi hotspot for initial setup.
+built for Raspberry Pi (Zero through 5) or any Debian/Ubuntu x86_64/arm64
+machine. It plays azan, iqama, and dua audio at scheduled times over
+Bluetooth, HDMI, a USB DAC, or a 3.5mm jack, shows Qibla direction and a
+prayer calendar, sends push notifications (with tap-to-play on a phone), and
+can act as its own Wi-Fi hotspot for initial setup.
 
 ## Contents
 
-- [Quick start](#quick-start)
+- [Quick start (Docker)](#quick-start-docker)
 - [Opening the web UI](#opening-the-web-ui)
 - [Features](#features)
 - [Audio backend](#audio-backend)
 - [Hardware support](#hardware-support)
-- [Manual install](#manual-install-no-installsh)
+- [Public HTTPS / custom domain](#public-https--custom-domain)
+- [Android TV app](#android-tv-app)
+- [Alternate: systemd service, no Docker](#alternate-systemd-service-no-docker)
 - [Configuration](#configuration)
 - [Managing the service](#managing-the-service)
 
-## Quick start
+## Quick start (Docker)
 
-1. On the Raspberry Pi (or Linux machine) that will run this:
+This is the actual production deployment method - a systemd-service
+alternative (no Docker) also exists, see
+[Alternate: systemd service](#alternate-systemd-service-no-docker), but
+Docker is what's tested and kept up to date.
+
+1. On the machine that will run this (Raspberry Pi, Intel NUC, or any
+   Debian/Ubuntu box):
 
    ```bash
-   git clone https://github.com/sharjeelkiyani/smart-azan.git ~/smart_azan_final
-   cd ~/smart_azan_final
-   ./install.sh
+   git clone https://github.com/sharjeelkiyani/smart-azan.git ~/apps/smart_azan_final
+   cd ~/apps/smart_azan_final
+   ./install_docker.sh
    ```
 
-2. `install.sh` installs everything needed (system packages, Python
-   dependencies, an HTTPS certificate, and a systemd service so it starts
-   automatically on every boot). At the end it prints the address to open,
-   for example:
+2. `install_docker.sh` installs and configures *everything* needed: Docker
+   + Compose, PulseAudio (as an always-on service, not lazily started - see
+   why in the script's comments), its Bluetooth module, BlueZ, Snapcast
+   (the local audio pipe the app writes to), a `.env` with your chosen admin
+   password, a self-signed HTTPS cert, and then builds and starts the
+   container. It asks one question (the admin password) and otherwise runs
+   unattended. At the end it prints the address to open, for example:
 
    ```
-   Web UI:          https://192.168.1.42:5050
+   Local web UI:  https://192.168.1.42:5050
    ```
 
 3. Open that address in a browser on any phone/laptop on the same network -
    see [Opening the web UI](#opening-the-web-ui) below for the one-time
    security warning you'll see and how to get past it.
 
-That's the entire setup. No account, no cloud service, no app store - it's a
-web page served directly from the device sitting next to your speaker.
+4. **If this is the first time this user has been added to the `docker` or
+   `audio` groups**, log out and back in (or reboot) once - group membership
+   doesn't apply to an already-running shell/session. The script tells you
+   at the end if this applies to you.
+
+That's the entire local setup - reachable on your own network at `https://
+<this-machine's-ip>:5050`. No account, no cloud service, no app store. For a
+real domain name reachable from outside your home network (like this
+project's own `smartazan.ssmarttec.com`), see
+[Public HTTPS / custom domain](#public-https--custom-domain) - that part is
+inherently specific to your domain registrar and router, so it isn't
+automated by the install script.
 
 ## Opening the web UI
 
@@ -130,18 +152,97 @@ on your speaker.
 
 ## Hardware support
 
-Tested on a Raspberry Pi 5 running PipeWire. Designed to also work on:
+Runs in production on both a Raspberry Pi and an Intel NUC (Ubuntu). Audio
+output works the same way on either:
 
+- **Bluetooth speaker** (including smart speakers like an Echo Show, which
+  needs the `pulseaudio-module-bluetooth` package `install_docker.sh`
+  installs) via BlueZ/PulseAudio.
+- **3.5mm jack / HDMI / USB DAC** via the host's own ALSA/PulseAudio sound
+  card.
 - **Pi Zero / Zero W / Zero 2 W** - no analog jack on the original Zero;
-  use a USB audio adapter or Bluetooth. `install.sh` installs ALSA/Bluetooth
-  tooling either way.
-- **Pi 3/4** - onboard 3.5mm jack, HDMI, USB, or Bluetooth all work via the
-  ALSA/Pulse backends above.
-- **Pi 5** - no analog jack on most builds; use HDMI, USB, or Bluetooth.
-- **Generic Debian/Ubuntu Linux** - `install.sh` targets `apt`; adapt the
-  package list for other distros.
+  use a USB audio adapter or Bluetooth.
 
-## What `install.sh` does
+On a non-Raspberry-Pi-OS host (e.g. Ubuntu), `install_docker.sh` also adds a
+`security_opt: [apparmor:unconfined]` requirement that's already baked into
+`docker-compose.yml` - Ubuntu's default Docker AppArmor profile otherwise
+blocks the container's D-Bus access entirely, breaking every Bluetooth
+operation. Raspberry Pi OS doesn't enable AppArmor, so this is a no-op there.
+
+## Public HTTPS / custom domain
+
+To reach this from outside your home network under a real domain (instead
+of `https://<lan-ip>:5050`), you need, separately from `install_docker.sh`:
+
+1. **A domain or subdomain you control**, with an A/CNAME record pointing at
+   your public IP (or a dynamic-DNS name if your IP isn't static).
+2. **A real certificate for it.** If your DNS registrar has no API for
+   `acme.sh`'s DNS-01 challenge (e.g. Squarespace), delegate just the
+   `_acme-challenge` subdomain via CNAME to a provider that does have one
+   (e.g. DuckDNS), then:
+   ```bash
+   export DuckDNS_Token='<your token>'
+   acme.sh --issue --domain yourdomain.example.com \
+     --challenge-alias your-duckdns-name.duckdns.org \
+     --dns dns_duckdns --keylength ec-256
+   ```
+3. **nginx** (outside the container, on the host or another machine on your
+   LAN) terminating that real cert and reverse-proxying to this app's own
+   self-signed HTTPS port:
+   ```nginx
+   server {
+       listen 8443 ssl;  # see note below on why not just 443
+       server_name yourdomain.example.com;
+       ssl_certificate     /path/to/fullchain.pem;
+       ssl_certificate_key /path/to/privkey.pem;
+       location / {
+           proxy_pass https://<this-machine-ip>:5050;
+           proxy_ssl_verify off;  # backend cert is self-signed, that's fine
+           proxy_set_header Host $host;
+           proxy_set_header X-Real-IP $remote_addr;
+           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+           proxy_set_header X-Forwarded-Proto https;
+       }
+   }
+   ```
+4. **A port-forward rule on your router** pointing some public port at that
+   nginx instance. Port 443 is the obvious choice, but check first - if
+   something else already forwards 443 to a different device, pick a free
+   port instead (e.g. 8443) and include it in the URL.
+
+Once this is set up, also set `SMART_AZAN_ADMIN_PASSWORD` in `.env` (see
+[Configuration](#configuration)) - don't expose this to the public internet
+without a login.
+
+## Android TV app
+
+A free, native Android/Fire TV app (`android-tv-app/`) is available as an
+alternative to opening the site in a browser - it auto-detects a new azan
+and plays it even if the app isn't already open, with a screensaver mode.
+GitHub Actions builds it automatically on every push to `android-tv-app/**`
+and publishes it to a rolling release (see `android-tv-app/README.md` for
+manual `adb install` instructions).
+
+If the app's own login is enabled (`SMART_AZAN_ADMIN_PASSWORD` set), the
+running server also exposes a password-gated direct download link, so a
+Fire TV/Android TV box can fetch the APK itself (via Silk Browser, or a
+sideloading tool like Downloader) without needing a computer in between:
+
+```
+https://<your-domain-or-ip>:5050/download-tv-app?password=<your-admin-password>
+```
+
+The app is dedicated to one server address, hardcoded in
+`MainActivity.kt`'s `DEFAULT_SERVER_URL` - update that (and let CI rebuild)
+if you fork this for a different install, or override the address per
+device via a long-press of Back on the remote.
+
+## Alternate: systemd service, no Docker
+
+An older, non-Docker install path also exists - a plain Python virtualenv
+run via systemd instead of a container. It's not the actively-used
+deployment (see [Quick start](#quick-start-docker) above for that), kept
+only for reference or genuinely resource-constrained devices:
 
 ```bash
 git clone https://github.com/sharjeelkiyani/smart-azan.git ~/smart_azan_final
@@ -149,34 +250,17 @@ cd ~/smart_azan_final
 ./install.sh
 ```
 
-- Installs required system packages (`ffmpeg`, `alsa-utils`,
-  `pulseaudio-utils`, `bluez`, `network-manager`)
-- Creates a Python virtual environment and installs dependencies
-- Copies `config.example.json` to `config.json` if you don't have one yet
-- Generates a self-signed HTTPS certificate for your Pi's current LAN IP(s)
-  (`gen_https_cert.sh`) if one doesn't already exist
-- Installs and enables the `smart-azan` systemd service so it starts on boot
-- Prints the web UI address to open when it finishes
+`install.sh` installs system packages (`ffmpeg`, `alsa-utils`,
+`pulseaudio-utils`, `bluez`, `network-manager`), creates a Python
+virtualenv, generates a self-signed cert, and installs
+`smart-azan.service` (a systemd unit using `%h`/`%U` specifiers, so it
+works for whichever user runs it as long as the project lives at
+`~/smart_azan_final`). It runs under **gunicorn** (`gunicorn_conf.py`), not
+Flask's dev server, always as a single worker (multiple would each start
+their own copy of the background scheduler/Bluetooth/Wi-Fi threads, racing
+to play the same azan multiple times).
 
-The systemd unit (`smart-azan.service`) uses systemd's `%h`/`%U` specifiers
-to resolve the project path and runtime directory from whichever user it
-runs as, so it works unmodified as long as the project lives at
-`~/smart_azan_final` for that user. Only `User=` needs to be filled in
-(`install.sh` does this automatically).
-
-The service runs under **gunicorn** (`gunicorn_conf.py`), not Flask's
-built-in dev server - the dev server leaks connections under sustained load
-(several browser tabs polling status endpoints, a router forwarding traffic
-to it, etc.) until it can no longer accept new ones, which is exactly what
-its own "do not use in production" warning is about. `gunicorn_conf.py`
-reads the port and HTTPS cert from the same `config.json`/`cert.pem`/
-`cert.key` files the app itself uses, always runs a single worker (multiple
-would each start their own copy of the background scheduler/Bluetooth/Wi-Fi
-threads, racing to play the same azan multiple times), and bounds the TLS
-handshake so a client that drops mid-connection (e.g. a phone losing signal)
-can't tie up a worker thread indefinitely.
-
-## Manual install (no install.sh)
+Manual install without even `install.sh`:
 
 ```bash
 sudo apt-get install -y python3-venv ffmpeg alsa-utils pulseaudio-utils bluez network-manager
@@ -191,10 +275,14 @@ sudo systemctl enable --now smart-azan
 
 ## Configuration
 
+- `.env` (gitignored - see `.env.example`) - `FLASK_SECRET_KEY` (random,
+  signs session cookies) and `SMART_AZAN_ADMIN_PASSWORD` (blank disables
+  login entirely, fine for LAN-only use - `install_docker.sh` sets both up
+  interactively)
 - `config.json` (gitignored - real Wi-Fi passwords and your Bluetooth MAC
   live here) - start from `config.example.json`
 - `cert.pem` / `cert.key` (gitignored, host-specific) - generated by
-  `gen_https_cert.sh`; re-run it if the Pi's LAN IP changes
+  `gen_https_cert.sh`; re-run it if this machine's LAN IP changes
 - `timetable.csv` (gitignored, user-specific) - one row per day:
 
   ```
@@ -210,12 +298,23 @@ sudo systemctl enable --now smart-azan
 
 ## Managing the service
 
+**Docker (the actual deployment - see [Quick start](#quick-start-docker)):**
+
+```bash
+docker compose ps
+docker compose logs -f smart-azan
+docker compose restart smart-azan   # after a code change - no rebuild needed
+docker compose up -d --build        # after a Dockerfile/requirements.txt change
+```
+
+**systemd (the [alternate, non-Docker](#alternate-systemd-service-no-docker) install):**
+
 ```bash
 sudo systemctl status smart-azan
 sudo systemctl restart smart-azan
 sudo journalctl -u smart-azan -f
 ```
 
-Web UI: `https://<pi-ip>:5050` (port configurable in Settings; see
-[Opening the web UI](#opening-the-web-ui) above for the HTTPS security
+Web UI: `https://<this-machine's-ip>:5050` (port configurable in Settings;
+see [Opening the web UI](#opening-the-web-ui) above for the HTTPS security
 warning you'll see the first time).
