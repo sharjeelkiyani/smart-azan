@@ -56,7 +56,8 @@ jobs:
         run: |
           mkdir -p ~/.android
           if [ -n "$KEYSTORE_B64" ]; then
-            echo "$KEYSTORE_B64" | base64 -d > ~/.android/debug.keystore
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/smart-azan-tv.keystore"
+            echo "SMART_AZAN_KEYSTORE=$RUNNER_TEMP/smart-azan-tv.keystore" >> "$GITHUB_ENV"
             echo "Signing with the permanent key from ANDROID_DEBUG_KEYSTORE_B64."
           else
             echo "::warning::ANDROID_DEBUG_KEYSTORE_B64 isn't set - this build's signature may not match the installed app."
