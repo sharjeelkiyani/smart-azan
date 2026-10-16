@@ -936,7 +936,7 @@ def tv_status():
     # screen's own address is the first X-Forwarded-For entry.
     ip = (request.headers.get("X-Forwarded-For") or request.remote_addr or "").split(",")[0].strip()
     tv_setup.record_poll(ip, request.headers.get("User-Agent"), client_id,
-                         request.args.get("kind"), request.args.get("name"))
+                         request.args.get("kind"), request.args.get("name"), request.args.get("sound"))
     with _tv_now_playing_lock:
         status = dict(_tv_now_playing)
     test = tv_setup.pending_test(ip, client_id)

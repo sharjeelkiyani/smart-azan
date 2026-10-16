@@ -1,84 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Smart Azan · Integrations<script>
-(function () {
-  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  async function post(url, body) {
-    const r = await fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
-    return r.json();
-  }
-
-  // ---- Find + test Fire TVs ----
-  const findBtn = document.getElementById('tv-find'), findStatus = document.getElementById('tv-find-status');
-  const results = document.getElementById('tv-results');
-  findBtn.addEventListener('click', async () => {
-    findBtn.disabled = true; findStatus.textContent = 'Searching this network (about 10 seconds)…'; results.innerHTML = '';
-    try {
-      const d = await (await fetch('{{ url_for("dashboard.tv_discover") }}')).json();
-      if (!d.tvs.length) {
-        findStatus.textContent = 'No Fire TVs found on ' + d.networks.join(', ') + '. Is ADB debugging on, and is the TV on this network?';
-        return;
-      }
-      findStatus.textContent = 'Found ' + d.tvs.length + ' on ' + d.networks.join(', ') + '.';
-      results.innerHTML = '<table style="width:100%;border-collapse:collapse">' + d.tvs.map(tv => `
-        <tr style="border-bottom:1px solid rgba(127,127,127,.2)">
-          <td style="padding:8px 4px"><label><input type="checkbox" class="tv-use" value="${esc(tv.ip)}" ${tv.authorized && (tv.in_use || tv.app_installed) ? 'checked' : ''} ${tv.authorized ? '' : 'disabled'}>
-            <strong>${esc(tv.model || 'Device')}</strong> <span class="muted">${esc(tv.ip)}</span></label>
-            <div class="muted" style="font-size:.9em">${tv.authorized ? (tv.app_installed ? 'Smart Azan TV app installed' : '') : ''} ${esc(tv.note || '')}</div></td>
-          <td style="padding:8px 4px;white-space:nowrap;text-align:right">${tv.authorized ? `
-            <button class="btn" type="button" data-ip="${esc(tv.ip)}" data-action="wake">Test wake</button>
-            <button class="btn" type="button" data-ip="${esc(tv.ip)}" data-action="play" ${tv.app_installed ? '' : 'disabled'}>Test play</button>
-            <button class="btn" type="button" data-ip="${esc(tv.ip)}" data-action="sleep">Sleep</button>` : ''}
-            <div class="muted tv-msg" data-for="${esc(tv.ip)}" style="font-size:.9em;margin-top:4px"></div></td>
-        </tr>`).join('') + '</table>' +
-        '<button class="btn primary" type="button" id="tv-use-save" style="margin-top:10px">Use the ticked TVs for azan</button>';
-      document.getElementById('tv-use-save').addEventListener('click', () => {
-        const ips = [...document.querySelectorAll('.tv-use:checked')].map(c => c.value);
-        const form = document.querySelector('input[name="adb_tv_ips"]').form;
-        form.querySelector('input[name="adb_tv_ips"]').value = ips.join(', ');
-        form.querySelector('input[name="adb_tv_enabled"]').checked = ips.length > 0;
-        form.submit();
-      });
-    } catch (e) {
-      findStatus.textContent = 'Search failed: ' + e;
-    } finally {
-      findBtn.disabled = false;
-    }
-  });
-  results.addEventListener('click', async ev => {
-    const b = ev.target.closest('button[data-action]'); if (!b) return;
-    const msg = results.querySelector(`.tv-msg[data-for="${b.dataset.ip}"]`);
-    b.disabled = true; msg.textContent = 'Working…';
-    try { const r = await post('{{ url_for("dashboard.tv_test") }}', {ip: b.dataset.ip, action: b.dataset.action}); msg.textContent = (r.ok ? '✓ ' : '✗ ') + r.message; }
-    catch (e) { msg.textContent = '✗ ' + e; }
-    b.disabled = false;
-  });
-
-  // ---- Connected screens ----
-  const list = document.getElementById('screen-list'), sStatus = document.getElementById('screens-status');
-  async function loadScreens() {
-    try {
-      const d = await (await fetch('{{ url_for("dashboard.tv_screens") }}')).json();
-      if (!d.screens.length) { list.textContent = 'No screen has the display open yet - use "Add a screen".'; return; }
-      list.innerHTML = '<table style="width:100%;border-collapse:collapse">' + d.screens.map(c => `
-        <tr style="border-bottom:1px solid rgba(127,127,127,.2)">
-          <td style="padding:6px 4px">${c.online ? '🟢' : '⚪'} <strong>${esc(c.name || c.kind)}</strong>
-            <span class="muted">${esc(c.name ? c.kind + ' · ' : '')}${esc(c.ip)}</span></td>
-          <td style="padding:6px 4px" class="muted">${c.online ? 'connected' : 'last seen ' + Math.round(c.seconds_ago / 60) + ' min ago'}</td>
-          <td style="padding:6px 4px;text-align:right">${c.online ? `<button class="btn" type="button" data-target="${esc(c.key)}">Test</button>` : ''}</td>
-        </tr>`).join('') + '</table>';
-    } catch (e) { list.textContent = 'Could not load screens: ' + e; }
-  }
-  list.addEventListener('click', async ev => {
-    const b = ev.target.closest('button[data-target]'); if (!b) return;
-    const r = await post('{{ url_for("dashboard.tv_test_screen") }}', {target: b.dataset.target}); sStatus.textContent = r.message;
-  });
-  document.getElementById('screens-test-all').addEventListener('click', async () => {
-    const r = await post('{{ url_for("dashboard.tv_test_screen") }}', {target: 'all'}); sStatus.textContent = r.message;
-  });
-  loadScreens(); setInterval(loadScreens, 10000);
-})();
-</script>
-{% endblock %}
+{% block title %}Smart Azan · Integrations{% endblock %}
 
 {% block content %}
   <section class="card">
@@ -302,7 +223,7 @@
         <tr style="border-bottom:1px solid rgba(127,127,127,.2)">
           <td style="padding:6px 4px">${c.online ? '🟢' : '⚪'} <strong>${esc(c.name || c.kind)}</strong>
             <span class="muted">${esc(c.name ? c.kind + ' · ' : '')}${esc(c.ip)}</span></td>
-          <td style="padding:6px 4px" class="muted">${c.online ? 'connected' : 'last seen ' + Math.round(c.seconds_ago / 60) + ' min ago'}</td>
+          <td style="padding:6px 4px" class="muted">${c.online ? 'connected' + (c.sound === false ? ' · <span style="color:#b45309">🔇 needs a tap on that screen for sound</span>' : '') : 'last seen ' + Math.round(c.seconds_ago / 60) + ' min ago'}</td>
           <td style="padding:6px 4px;text-align:right">${c.online ? `<button class="btn" type="button" data-target="${esc(c.key)}">Test</button>` : ''}</td>
         </tr>`).join('') + '</table>';
     } catch (e) { list.textContent = 'Could not load screens: ' + e; }

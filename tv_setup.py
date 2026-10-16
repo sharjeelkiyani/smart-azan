@@ -43,7 +43,7 @@ def _kind(user_agent, explicit=None):
     return "Browser"
 
 
-def record_poll(ip, user_agent, client_id=None, kind=None, name=None):
+def record_poll(ip, user_agent, client_id=None, kind=None, name=None, sound=None):
     """Called on every /tv_status poll (every 5s from each screen)."""
     kind = _kind(user_agent, kind)
     key = (client_id or f"{ip}|{kind}")[:80]
@@ -53,6 +53,8 @@ def record_poll(ip, user_agent, client_id=None, kind=None, name=None):
             "key": key, "ip": ip, "kind": kind,
             "name": (name or entry.get("name") or "")[:60],
             "first_seen": entry.get("first_seen", time.time()),
+            # None = unknown (Fire TV app background service doesn't report it)
+            "sound": None if sound is None else sound == "1",
             "last_seen": time.time(),
         }
 

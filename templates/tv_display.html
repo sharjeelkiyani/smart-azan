@@ -236,6 +236,9 @@
        background:#0f5132;color:#fff;padding:18px 28px;border-radius:14px;font-size:1.4rem;box-shadow:0 8px 30px rgba(0,0,0,.4)">
     &#10003; This screen is connected to Smart Azan
   </div>
+  <button id="sound-unlock" type="button" hidden style="position:fixed;left:50%;bottom:12%;transform:translateX(-50%);z-index:60;
+          background:#b45309;color:#fff;border:0;border-radius:16px;padding:20px 34px;font-size:1.5rem;
+          box-shadow:0 8px 30px rgba(0,0,0,.45);cursor:pointer">&#128264; Tap to turn on sound</button>
   <button id="test-this-device" type="button" style="position:fixed;right:14px;bottom:14px;z-index:40;opacity:.55;
           background:rgba(255,255,255,.12);color:inherit;border:1px solid rgba(255,255,255,.3);border-radius:10px;
           padding:8px 14px;font-size:.9rem;cursor:pointer">Test this device</button>
@@ -305,6 +308,38 @@
 
     // A short three-note chime made in the browser - no file needed, so it works
     // even before any azan audio has been set up.
+    // ---- Sound unlock ----
+    // Phone/tablet/laptop browsers block a page from making sound until it has been
+    // tapped once. One shared AudioContext (for the test chime) and one shared <audio>
+    // player (for every azan/dua) are unlocked by that first tap and reused, since
+    // some browsers (iPad Safari) would block each new player separately. The Fire TV
+    // app's WebView allows sound without a tap, so it never sees the prompt.
+    let audioCtx = null;
+    const player = new Audio();
+    trackPlayback(player);
+    const SILENT_WAV = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
+    function soundAllowed() { return !!audioCtx && audioCtx.state === 'running'; }
+    function ensureContext() {
+      if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+      return audioCtx;
+    }
+    function updateSoundPrompt() {
+      const btn = document.getElementById('sound-unlock');
+      if (btn) btn.hidden = soundAllowed();
+    }
+    function unlockSound() {
+      const ctx = ensureContext();
+      if (ctx && ctx.state !== 'running') ctx.resume().then(updateSoundPrompt, () => {});
+      if (!player.src || player.src === SILENT_WAV) {
+        player.src = SILENT_WAV;
+        player.play().catch(() => {});
+      }
+      setTimeout(updateSoundPrompt, 300);
+    }
+    ensureContext();
+    setTimeout(updateSoundPrompt, 800);
+    ['pointerdown', 'keydown', 'touchstart'].forEach(ev => document.addEventListener(ev, unlockSound, {passive: true}));
+
     let lastChimeAt = 0;
     function playTestChime(force) {
       // The TV app opening this page for a test, then the next poll offering the same
@@ -312,32 +347,34 @@
       if (!force && Date.now() - lastChimeAt < 15000) return;
       lastChimeAt = Date.now();
       const banner = document.getElementById('test-banner');
-      if (banner) { banner.hidden = false; setTimeout(() => { banner.hidden = true; }, 8000); }
-      try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        [523.25, 659.25, 783.99].forEach((freq, i) => {
-          const osc = ctx.createOscillator(), gain = ctx.createGain();
-          osc.frequency.value = freq; osc.connect(gain); gain.connect(ctx.destination);
-          const t = ctx.currentTime + i * 0.35;
-          gain.gain.setValueAtTime(0.0001, t); gain.gain.exponentialRampToValueAtTime(0.4, t + 0.03);
-          gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
-          osc.start(t); osc.stop(t + 0.65);
-        });
-        setTimeout(() => ctx.close(), 2000);
-      } catch (e) {}
+      if (banner) {
+        banner.innerHTML = soundAllowed() ? '&#10003; This screen is connected to Smart Azan'
+          : '&#10003; Connected - but sound is off on this device. Tap the orange button.';
+        banner.hidden = false; setTimeout(() => { banner.hidden = true; }, 8000);
+      }
+      const ctx = ensureContext();
+      if (!ctx) return;
+      if (ctx.state !== 'running') { ctx.resume().catch(() => {}); updateSoundPrompt(); }
+      [523.25, 659.25, 783.99].forEach((freq, i) => {
+        const osc = ctx.createOscillator(), gain = ctx.createGain();
+        osc.frequency.value = freq; osc.connect(gain); gain.connect(ctx.destination);
+        const t = ctx.currentTime + i * 0.35;
+        gain.gain.setValueAtTime(0.0001, t); gain.gain.exponentialRampToValueAtTime(0.4, t + 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
+        osc.start(t); osc.stop(t + 0.65);
+      });
     }
     document.getElementById('test-this-device').addEventListener('click', () => playTestChime(true));
 
     async function pollNowPlaying() {
       try {
-        const r = await fetch(statusUrl);
+        const r = await fetch(statusUrl + '&sound=' + (soundAllowed() ? '1' : '0'));
         const j = await r.json();
         if (j.filename && j.play_id !== lastPlayId) {
           lastPlayId = j.play_id;
           if (j.filename === '__test__') { playTestChime(); return; }
-          const audio = new Audio('/audio_file/' + encodeURIComponent(j.filename));
-          trackPlayback(audio);
-          audio.play().catch(() => {});
+          player.src = '/audio_file/' + encodeURIComponent(j.filename);
+          player.play().catch(() => { updateSoundPrompt(); });
         }
       } catch (e) {}
     }
