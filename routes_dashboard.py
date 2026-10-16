@@ -11,6 +11,7 @@ import bluetooth
 import history_log
 import islamic_utils
 import fire_tv
+import tv_setup
 
 bp = Blueprint("dashboard", __name__)
 
@@ -237,12 +238,84 @@ def integrations_page():
             cfg["adb_tv_enabled"] = request.form.get("adb_tv_enabled") == "on"
             cfg["adb_tv_ips"] = (request.form.get("adb_tv_ips") or "").strip()
             cfg.pop("adb_tv_ip", None)
+            # Only for TVs on a different network than this machine (e.g. behind a
+            # second router) - blank for a normal single-network home.
+            cfg["tv_wake_helper_url"] = (request.form.get("tv_wake_helper_url") or "").strip()
 
         _save(cfg)
         flash("Integration settings saved.", "success")
         return redirect(url_for("dashboard.integrations_page"))
 
     cfg = _cfg()
-    tv_http_port = cfg.get("tv_http_port", 5051)
-    tv_display_url = f"http://{fire_tv._lan_ip()}:{tv_http_port}"
-    return render_template("integrations.html", cfg=cfg, tv_display_url=tv_display_url)
+    return render_template("integrations.html", cfg=cfg, tv_display_url=_tv_display_url(cfg))
+
+
+def _tv_display_url(cfg):
+    return f"http://{fire_tv._lan_ip()}:{cfg.get('tv_http_port', 5051)}"
+
+
+# ----------------- Screens: find, test, connect -----------------
+
+def _valid_ip(value):
+    import ipaddress
+    try:
+        return str(ipaddress.ip_address((value or "").strip()))
+    except ValueError:
+        return None
+
+
+@bp.route("/integrations/tv/discover")
+def tv_discover():
+    """Finds Fire TVs (network debugging on) on this machine's own home network."""
+    result = tv_setup.discover()
+    configured = set(fire_tv._parse_tv_ips(_cfg()))
+    for tv in result["tvs"]:
+        tv["in_use"] = tv["ip"] in configured
+    return jsonify(result)
+
+
+@bp.route("/integrations/tv/test", methods=["POST"])
+def tv_test():
+    data = request.get_json(silent=True) or {}
+    ip, action = _valid_ip(data.get("ip")), data.get("action")
+    if not ip or action not in ("wake", "play", "sleep"):
+        return jsonify({"ok": False, "message": "Pick a TV and a test."}), 400
+    return jsonify(tv_setup.test_tv(ip, action))
+
+
+@bp.route("/integrations/tv/test-fully", methods=["POST"])
+def tv_test_fully():
+    action = (request.get_json(silent=True) or {}).get("action")
+    if action not in ("wake", "sleep"):
+        return jsonify({"ok": False, "message": "Unknown test."}), 400
+    cfg = _cfg()
+    return jsonify(tv_setup.test_fully(cfg.get("fully_kiosk_url"), cfg.get("fully_kiosk_password"), action))
+
+
+@bp.route("/integrations/tv/screens")
+def tv_screens():
+    return jsonify({"screens": tv_setup.clients()})
+
+
+@bp.route("/integrations/tv/test-screen", methods=["POST"])
+def tv_test_screen():
+    """Plays the test chime on one connected screen (by its id) or on all of them."""
+    target = ((request.get_json(silent=True) or {}).get("target") or "all")[:80]
+    tv_setup.start_test(target)
+    return jsonify({"ok": True, "message": "Test chime sent - every screen showing Smart Azan should "
+                                          "chime within 10 seconds." if target == "all" else
+                                          "Test chime sent - that screen should chime within 10 seconds."})
+
+
+@bp.route("/integrations/tv/connect")
+def tv_connect():
+    """A page to show on this machine's screen (or print): the display address plus a QR
+    code, so a phone, tablet, laptop or TV browser on the same network opens it at once."""
+    url = _tv_display_url(_cfg()) + "/tv-display"
+    qr_svg = ""
+    try:
+        import segno
+        qr_svg = segno.make(url, error="m").svg_inline(scale=8, dark="#111", light="#fff")
+    except Exception:
+        pass  # without segno the page still shows the address in big text
+    return render_template("tv_connect.html", url=url, qr_svg=qr_svg)

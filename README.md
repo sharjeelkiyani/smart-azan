@@ -15,6 +15,7 @@ can act as its own Wi-Fi hotspot for initial setup.
 - [Audio backend](#audio-backend)
 - [Hardware support](#hardware-support)
 - [Public HTTPS / custom domain](#public-https--custom-domain)
+- [Screens at a new house](#screens-at-a-new-house-one-home-network)
 - [Android TV app](#android-tv-app)
 - [Alternate: systemd service, no Docker](#alternate-systemd-service-no-docker)
 - [Configuration](#configuration)
@@ -214,6 +215,29 @@ of `https://<lan-ip>:5050`), you need, separately from `install_docker.sh`:
 Once this is set up, also set `SMART_AZAN_ADMIN_PASSWORD` in `.env` (see
 [Configuration](#configuration)) - don't expose this to the public internet
 without a login.
+
+## Screens at a new house (one home network)
+
+For a normal home where everything is on one Wi-Fi / router - e.g. setting Smart Azan up
+for a friend - nothing needs typing in:
+
+1. Install Smart Azan on a small always-on machine (a Raspberry Pi is fine) - see Quick start.
+2. Open the web UI -> **Integrations** -> **Screens**.
+3. **Fire TVs:** on each Fire TV once, turn on *Settings -> My Fire TV -> Developer options ->
+   ADB debugging* (no Developer options? *About* -> click the TV's name 7 times), and install
+   the Smart Azan TV app from `http://<this machine>:5051/download-tv-app`. Then press
+   **Find Fire TVs on this network**: each one is listed (the first time, press **Allow** on
+   the TV), with **Test wake**, **Test play** and **Sleep** buttons. Tick the TVs to use and
+   press **Use the ticked TVs for azan**.
+4. **Phones, tablets, laptops, TV browsers:** **Add a screen** shows a QR code and the address
+   (`http://<this machine>:5051/tv-display`). Open it on the device; add `?name=Kitchen%20tablet`
+   once to name it. The **Test this device** button (bottom-right) plays a short chime.
+5. **Screens showing Smart Azan now** lists every connected screen, with a **Test** button each
+   and **Play test chime on all screens** - check them all before the next prayer.
+
+Only if the TVs are on a *different* network than this machine (e.g. behind a second router)
+is anything extra needed: run `tv_wake_helper.py` on a machine on the TVs' network and enter
+its address under *Advanced* in the Fire TV settings.
 
 ## Android TV app
 
