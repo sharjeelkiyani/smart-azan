@@ -24,6 +24,7 @@ import history_log
 import islamic_utils
 import quran_player
 import fire_tv
+import tv_setup
 import push_notifications
 
 # ----------------- constants -----------------
@@ -481,6 +482,24 @@ threading.Thread(target=_mosque_import_loop, daemon=True).start()
 # on its own, without needing a remote "load this now" command at all.
 _tv_now_playing = {"filename": None, "play_id": 0}
 _tv_now_playing_lock = threading.Lock()
+# How long a finished azan/dua is still reported by /tv_status - long enough for a
+# screen that polls a few seconds late to still pick it up, short enough that a screen
+# starting up later (a Fire TV after a power cut) doesn't replay something that has
+# already finished. Before this, the last file was reported forever.
+_TV_NOW_PLAYING_GRACE_S = 60
+
+
+def _clear_tv_now_playing_later():
+    with _tv_now_playing_lock:
+        finished_id = _tv_now_playing["play_id"]
+
+    def _clear():
+        time.sleep(_TV_NOW_PLAYING_GRACE_S)
+        with _tv_now_playing_lock:
+            if _tv_now_playing["play_id"] == finished_id:  # nothing newer started meanwhile
+                _tv_now_playing["filename"] = None
+
+    threading.Thread(target=_clear, daemon=True).start()
 
 # Serializes the actual audio_player.play() call below - _tv_now_playing_lock
 # only ever protected that bookkeeping dict, not playback itself, so two
@@ -537,6 +556,7 @@ def play_audio(filename, event_type="manual", label=None):
     with _playback_lock:
         ok = audio_player.play(path, cfg_now)
     tv_finished.set()
+    _clear_tv_now_playing_later()
     history_log.log_event(event_type, label or event_type, filename, ok)
     return ok
 
@@ -911,8 +931,19 @@ def tv_status():
     playing a new azan/dua on its own - this is what lets a plain app/tab
     that's just sitting on /tv-display react to a scheduled event, with no
     remote-control mechanism (like Fully Kiosk's REST API) required at all."""
+    client_id = (request.args.get("client") or "")[:80] or None
+    # Behind a reverse proxy (e.g. the TV reaching this through a domain), the
+    # screen's own address is the first X-Forwarded-For entry.
+    ip = (request.headers.get("X-Forwarded-For") or request.remote_addr or "").split(",")[0].strip()
+    tv_setup.record_poll(ip, request.headers.get("User-Agent"), client_id,
+                         request.args.get("kind"), request.args.get("name"))
     with _tv_now_playing_lock:
-        return dict(_tv_now_playing)
+        status = dict(_tv_now_playing)
+    test = tv_setup.pending_test(ip, client_id)
+    if test and not status.get("filename"):  # a test never interrupts a real azan
+        status.update(filename=tv_setup.TEST_FILENAME,
+                      play_id=tv_setup.TEST_PLAY_ID_BASE + test["test_id"], test=True)
+    return status
 
 
 @app.route("/audio_file/<path:filename>")

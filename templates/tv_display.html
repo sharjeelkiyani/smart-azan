@@ -228,9 +228,17 @@
     </div>
   </div>
 
-  {% if play_file %}
+  {% if play_file and play_file != '__test__' %}
     <audio autoplay id="play-audio" src="{{ url_for('serve_audio_file', filename=play_file) }}"></audio>
   {% endif %}
+
+  <div id="test-banner" hidden style="position:fixed;left:50%;top:6%;transform:translateX(-50%);z-index:50;
+       background:#0f5132;color:#fff;padding:18px 28px;border-radius:14px;font-size:1.4rem;box-shadow:0 8px 30px rgba(0,0,0,.4)">
+    &#10003; This screen is connected to Smart Azan
+  </div>
+  <button id="test-this-device" type="button" style="position:fixed;right:14px;bottom:14px;z-index:40;opacity:.55;
+          background:rgba(255,255,255,.12);color:inherit;border:1px solid rgba(255,255,255,.3);border-radius:10px;
+          padding:8px 14px;font-size:.9rem;cursor:pointer">Test this device</button>
 
   <script>
     // ---------- Quran verse carousel ----------
@@ -281,18 +289,59 @@
 
     // ---------- Poll for a new azan/dua and autoplay it ----------
     let lastPlayId = {{ play_id|tojson }};
+    // Each screen tells the server who it is, so Smart Azan's Integrations page can
+    // list the screens that are connected right now. ?name=Kitchen%20tablet on the
+    // address names this screen (remembered on the device).
+    const params = new URLSearchParams(location.search);
+    function remember(key, value) { try { localStorage.setItem(key, value); } catch (e) {} }
+    function recall(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
+    let clientId = recall('smartAzanClientId');
+    if (!clientId) { clientId = 'scr-' + Math.random().toString(36).slice(2, 10); remember('smartAzanClientId', clientId); }
+    if (params.get('name')) remember('smartAzanScreenName', params.get('name'));
+    const screenName = recall('smartAzanScreenName') || '';
+    const statusUrl = '/tv_status?client=' + encodeURIComponent(clientId) +
+                      '&kind=' + encodeURIComponent(window.SmartAzanTV ? 'Fire TV app' : '') +
+                      '&name=' + encodeURIComponent(screenName);
+
+    // A short three-note chime made in the browser - no file needed, so it works
+    // even before any azan audio has been set up.
+    let lastChimeAt = 0;
+    function playTestChime(force) {
+      // The TV app opening this page for a test, then the next poll offering the same
+      // test, would otherwise chime twice.
+      if (!force && Date.now() - lastChimeAt < 15000) return;
+      lastChimeAt = Date.now();
+      const banner = document.getElementById('test-banner');
+      if (banner) { banner.hidden = false; setTimeout(() => { banner.hidden = true; }, 8000); }
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        [523.25, 659.25, 783.99].forEach((freq, i) => {
+          const osc = ctx.createOscillator(), gain = ctx.createGain();
+          osc.frequency.value = freq; osc.connect(gain); gain.connect(ctx.destination);
+          const t = ctx.currentTime + i * 0.35;
+          gain.gain.setValueAtTime(0.0001, t); gain.gain.exponentialRampToValueAtTime(0.4, t + 0.03);
+          gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
+          osc.start(t); osc.stop(t + 0.65);
+        });
+        setTimeout(() => ctx.close(), 2000);
+      } catch (e) {}
+    }
+    document.getElementById('test-this-device').addEventListener('click', () => playTestChime(true));
+
     async function pollNowPlaying() {
       try {
-        const r = await fetch('/tv_status');
+        const r = await fetch(statusUrl);
         const j = await r.json();
         if (j.filename && j.play_id !== lastPlayId) {
           lastPlayId = j.play_id;
+          if (j.filename === '__test__') { playTestChime(); return; }
           const audio = new Audio('/audio_file/' + encodeURIComponent(j.filename));
           trackPlayback(audio);
           audio.play().catch(() => {});
         }
       } catch (e) {}
     }
+    {% if play_file == '__test__' %}playTestChime();{% endif %}
     setInterval(pollNowPlaying, 5000);
 
     // ---------- Keep long recitations playing to the end ----------

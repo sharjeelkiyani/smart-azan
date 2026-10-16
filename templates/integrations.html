@@ -1,5 +1,84 @@
 {% extends "base.html" %}
-{% block title %}Smart Azan · Integrations{% endblock %}
+{% block title %}Smart Azan · Integrations<script>
+(function () {
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  async function post(url, body) {
+    const r = await fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+    return r.json();
+  }
+
+  // ---- Find + test Fire TVs ----
+  const findBtn = document.getElementById('tv-find'), findStatus = document.getElementById('tv-find-status');
+  const results = document.getElementById('tv-results');
+  findBtn.addEventListener('click', async () => {
+    findBtn.disabled = true; findStatus.textContent = 'Searching this network (about 10 seconds)…'; results.innerHTML = '';
+    try {
+      const d = await (await fetch('{{ url_for("dashboard.tv_discover") }}')).json();
+      if (!d.tvs.length) {
+        findStatus.textContent = 'No Fire TVs found on ' + d.networks.join(', ') + '. Is ADB debugging on, and is the TV on this network?';
+        return;
+      }
+      findStatus.textContent = 'Found ' + d.tvs.length + ' on ' + d.networks.join(', ') + '.';
+      results.innerHTML = '<table style="width:100%;border-collapse:collapse">' + d.tvs.map(tv => `
+        <tr style="border-bottom:1px solid rgba(127,127,127,.2)">
+          <td style="padding:8px 4px"><label><input type="checkbox" class="tv-use" value="${esc(tv.ip)}" ${tv.authorized && (tv.in_use || tv.app_installed) ? 'checked' : ''} ${tv.authorized ? '' : 'disabled'}>
+            <strong>${esc(tv.model || 'Device')}</strong> <span class="muted">${esc(tv.ip)}</span></label>
+            <div class="muted" style="font-size:.9em">${tv.authorized ? (tv.app_installed ? 'Smart Azan TV app installed' : '') : ''} ${esc(tv.note || '')}</div></td>
+          <td style="padding:8px 4px;white-space:nowrap;text-align:right">${tv.authorized ? `
+            <button class="btn" type="button" data-ip="${esc(tv.ip)}" data-action="wake">Test wake</button>
+            <button class="btn" type="button" data-ip="${esc(tv.ip)}" data-action="play" ${tv.app_installed ? '' : 'disabled'}>Test play</button>
+            <button class="btn" type="button" data-ip="${esc(tv.ip)}" data-action="sleep">Sleep</button>` : ''}
+            <div class="muted tv-msg" data-for="${esc(tv.ip)}" style="font-size:.9em;margin-top:4px"></div></td>
+        </tr>`).join('') + '</table>' +
+        '<button class="btn primary" type="button" id="tv-use-save" style="margin-top:10px">Use the ticked TVs for azan</button>';
+      document.getElementById('tv-use-save').addEventListener('click', () => {
+        const ips = [...document.querySelectorAll('.tv-use:checked')].map(c => c.value);
+        const form = document.querySelector('input[name="adb_tv_ips"]').form;
+        form.querySelector('input[name="adb_tv_ips"]').value = ips.join(', ');
+        form.querySelector('input[name="adb_tv_enabled"]').checked = ips.length > 0;
+        form.submit();
+      });
+    } catch (e) {
+      findStatus.textContent = 'Search failed: ' + e;
+    } finally {
+      findBtn.disabled = false;
+    }
+  });
+  results.addEventListener('click', async ev => {
+    const b = ev.target.closest('button[data-action]'); if (!b) return;
+    const msg = results.querySelector(`.tv-msg[data-for="${b.dataset.ip}"]`);
+    b.disabled = true; msg.textContent = 'Working…';
+    try { const r = await post('{{ url_for("dashboard.tv_test") }}', {ip: b.dataset.ip, action: b.dataset.action}); msg.textContent = (r.ok ? '✓ ' : '✗ ') + r.message; }
+    catch (e) { msg.textContent = '✗ ' + e; }
+    b.disabled = false;
+  });
+
+  // ---- Connected screens ----
+  const list = document.getElementById('screen-list'), sStatus = document.getElementById('screens-status');
+  async function loadScreens() {
+    try {
+      const d = await (await fetch('{{ url_for("dashboard.tv_screens") }}')).json();
+      if (!d.screens.length) { list.textContent = 'No screen has the display open yet - use "Add a screen".'; return; }
+      list.innerHTML = '<table style="width:100%;border-collapse:collapse">' + d.screens.map(c => `
+        <tr style="border-bottom:1px solid rgba(127,127,127,.2)">
+          <td style="padding:6px 4px">${c.online ? '🟢' : '⚪'} <strong>${esc(c.name || c.kind)}</strong>
+            <span class="muted">${esc(c.name ? c.kind + ' · ' : '')}${esc(c.ip)}</span></td>
+          <td style="padding:6px 4px" class="muted">${c.online ? 'connected' : 'last seen ' + Math.round(c.seconds_ago / 60) + ' min ago'}</td>
+          <td style="padding:6px 4px;text-align:right">${c.online ? `<button class="btn" type="button" data-target="${esc(c.key)}">Test</button>` : ''}</td>
+        </tr>`).join('') + '</table>';
+    } catch (e) { list.textContent = 'Could not load screens: ' + e; }
+  }
+  list.addEventListener('click', async ev => {
+    const b = ev.target.closest('button[data-target]'); if (!b) return;
+    const r = await post('{{ url_for("dashboard.tv_test_screen") }}', {target: b.dataset.target}); sStatus.textContent = r.message;
+  });
+  document.getElementById('screens-test-all').addEventListener('click', async () => {
+    const r = await post('{{ url_for("dashboard.tv_test_screen") }}', {target: 'all'}); sStatus.textContent = r.message;
+  });
+  loadScreens(); setInterval(loadScreens, 10000);
+})();
+</script>
+{% endblock %}
 
 {% block content %}
   <section class="card">
@@ -41,6 +120,33 @@
       </p>
       <button class="btn primary" type="submit" style="margin-top:14px">Save</button>
     </form>
+  </section>
+
+  <section class="card" id="screens">
+    <h2>📺 Screens</h2>
+    <p class="muted">
+      Everything on one home network? Then nothing needs typing in: find your Fire TVs, test them,
+      and add phones, tablets or laptops with a QR code.
+    </p>
+
+    <h3 style="margin-top:14px">Fire TVs</h3>
+    <p class="muted">
+      On each Fire TV, once: <strong>Settings &rarr; My Fire TV &rarr; Developer options &rarr; ADB debugging: ON</strong>
+      (no Developer options? open <em>About</em> and click the TV's name 7 times). Install the Smart Azan TV app from
+      <code>{{ tv_display_url }}/download-tv-app</code> in the TV's browser, or with the Downloader app.
+    </p>
+    <button class="btn primary" type="button" id="tv-find">Find Fire TVs on this network</button>
+    <span class="muted" id="tv-find-status" style="margin-left:10px"></span>
+    <div id="tv-results" style="margin-top:12px"></div>
+
+    <h3 style="margin-top:20px">Screens showing Smart Azan now</h3>
+    <p class="muted">
+      Every Fire TV app, TV browser, phone, tablet or laptop that has the display open.
+      <a href="{{ url_for('dashboard.tv_connect') }}">Add a screen (QR code)</a>
+    </p>
+    <div id="screen-list" class="muted">Loading&hellip;</div>
+    <button class="btn" type="button" id="screens-test-all" style="margin-top:10px">Play test chime on all screens</button>
+    <span class="muted" id="screens-status" style="margin-left:10px"></span>
   </section>
 
   <section class="card">
@@ -106,7 +212,23 @@
                placeholder="192.168.50.129, 192.168.50.172"
                value="{{ cfg.get('adb_tv_ips', '') }}">
       </div>
-      <p class="muted" style="margin-top:4px">Comma-separated if you have more than one Fire TV running the app.</p>
+      <p class="muted" style="margin-top:4px">Comma-separated if you have more than one Fire TV running the app.
+        <strong>Find Fire TVs</strong> above fills this in for you.</p>
+
+      <details style="margin-top:12px">
+        <summary class="muted">Advanced: TVs on a different network than this machine</summary>
+        <p class="muted" style="margin-top:8px">
+          Only if your TVs are on a separate network this machine can't reach (for example behind a
+          second router): run <code>tv_wake_helper.py</code> on a machine that <em>is</em> on the TVs' network
+          and enter its address here. Leave blank for a normal home with one network.
+        </p>
+        <div class="row" style="margin-top:6px">
+          <label class="muted" style="min-width:140px">Wake helper address</label>
+          <input class="input" type="text" name="tv_wake_helper_url" id="tv_wake_helper_url"
+                 placeholder="http://192.168.1.20:5199"
+                 value="{{ cfg.get('tv_wake_helper_url', '') }}">
+        </div>
+      </details>
 
       <button class="btn primary" type="submit" style="margin-top:14px">Save</button>
     </form>
@@ -116,4 +238,83 @@
     <h2>More integrations</h2>
     <p class="muted">Coming later: Google Calendar sync, Alexa routines. Let me know what you'd like prioritized.</p>
   </section>
+<script>
+(function () {
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  async function post(url, body) {
+    const r = await fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+    return r.json();
+  }
+
+  // ---- Find + test Fire TVs ----
+  const findBtn = document.getElementById('tv-find'), findStatus = document.getElementById('tv-find-status');
+  const results = document.getElementById('tv-results');
+  findBtn.addEventListener('click', async () => {
+    findBtn.disabled = true; findStatus.textContent = 'Searching this network (about 10 seconds)…'; results.innerHTML = '';
+    try {
+      const d = await (await fetch('{{ url_for("dashboard.tv_discover") }}')).json();
+      if (!d.tvs.length) {
+        findStatus.textContent = 'No Fire TVs found on ' + d.networks.join(', ') + '. Is ADB debugging on, and is the TV on this network?';
+        return;
+      }
+      findStatus.textContent = 'Found ' + d.tvs.length + ' on ' + d.networks.join(', ') + '.';
+      results.innerHTML = '<table style="width:100%;border-collapse:collapse">' + d.tvs.map(tv => `
+        <tr style="border-bottom:1px solid rgba(127,127,127,.2)">
+          <td style="padding:8px 4px"><label><input type="checkbox" class="tv-use" value="${esc(tv.ip)}" ${tv.authorized && (tv.in_use || tv.app_installed) ? 'checked' : ''} ${tv.authorized ? '' : 'disabled'}>
+            <strong>${esc(tv.model || 'Device')}</strong> <span class="muted">${esc(tv.ip)}</span></label>
+            <div class="muted" style="font-size:.9em">${tv.authorized ? (tv.app_installed ? 'Smart Azan TV app installed' : '') : ''} ${esc(tv.note || '')}</div></td>
+          <td style="padding:8px 4px;white-space:nowrap;text-align:right">${tv.authorized ? `
+            <button class="btn" type="button" data-ip="${esc(tv.ip)}" data-action="wake">Test wake</button>
+            <button class="btn" type="button" data-ip="${esc(tv.ip)}" data-action="play" ${tv.app_installed ? '' : 'disabled'}>Test play</button>
+            <button class="btn" type="button" data-ip="${esc(tv.ip)}" data-action="sleep">Sleep</button>` : ''}
+            <div class="muted tv-msg" data-for="${esc(tv.ip)}" style="font-size:.9em;margin-top:4px"></div></td>
+        </tr>`).join('') + '</table>' +
+        '<button class="btn primary" type="button" id="tv-use-save" style="margin-top:10px">Use the ticked TVs for azan</button>';
+      document.getElementById('tv-use-save').addEventListener('click', () => {
+        const ips = [...document.querySelectorAll('.tv-use:checked')].map(c => c.value);
+        const form = document.querySelector('input[name="adb_tv_ips"]').form;
+        form.querySelector('input[name="adb_tv_ips"]').value = ips.join(', ');
+        form.querySelector('input[name="adb_tv_enabled"]').checked = ips.length > 0;
+        form.submit();
+      });
+    } catch (e) {
+      findStatus.textContent = 'Search failed: ' + e;
+    } finally {
+      findBtn.disabled = false;
+    }
+  });
+  results.addEventListener('click', async ev => {
+    const b = ev.target.closest('button[data-action]'); if (!b) return;
+    const msg = results.querySelector(`.tv-msg[data-for="${b.dataset.ip}"]`);
+    b.disabled = true; msg.textContent = 'Working…';
+    try { const r = await post('{{ url_for("dashboard.tv_test") }}', {ip: b.dataset.ip, action: b.dataset.action}); msg.textContent = (r.ok ? '✓ ' : '✗ ') + r.message; }
+    catch (e) { msg.textContent = '✗ ' + e; }
+    b.disabled = false;
+  });
+
+  // ---- Connected screens ----
+  const list = document.getElementById('screen-list'), sStatus = document.getElementById('screens-status');
+  async function loadScreens() {
+    try {
+      const d = await (await fetch('{{ url_for("dashboard.tv_screens") }}')).json();
+      if (!d.screens.length) { list.textContent = 'No screen has the display open yet - use "Add a screen".'; return; }
+      list.innerHTML = '<table style="width:100%;border-collapse:collapse">' + d.screens.map(c => `
+        <tr style="border-bottom:1px solid rgba(127,127,127,.2)">
+          <td style="padding:6px 4px">${c.online ? '🟢' : '⚪'} <strong>${esc(c.name || c.kind)}</strong>
+            <span class="muted">${esc(c.name ? c.kind + ' · ' : '')}${esc(c.ip)}</span></td>
+          <td style="padding:6px 4px" class="muted">${c.online ? 'connected' : 'last seen ' + Math.round(c.seconds_ago / 60) + ' min ago'}</td>
+          <td style="padding:6px 4px;text-align:right">${c.online ? `<button class="btn" type="button" data-target="${esc(c.key)}">Test</button>` : ''}</td>
+        </tr>`).join('') + '</table>';
+    } catch (e) { list.textContent = 'Could not load screens: ' + e; }
+  }
+  list.addEventListener('click', async ev => {
+    const b = ev.target.closest('button[data-target]'); if (!b) return;
+    const r = await post('{{ url_for("dashboard.tv_test_screen") }}', {target: b.dataset.target}); sStatus.textContent = r.message;
+  });
+  document.getElementById('screens-test-all').addEventListener('click', async () => {
+    const r = await post('{{ url_for("dashboard.tv_test_screen") }}', {target: 'all'}); sStatus.textContent = r.message;
+  });
+  loadScreens(); setInterval(loadScreens, 10000);
+})();
+</script>
 {% endblock %}
