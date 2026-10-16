@@ -939,6 +939,12 @@ def tv_status():
                          request.args.get("kind"), request.args.get("name"), request.args.get("sound"))
     with _tv_now_playing_lock:
         status = dict(_tv_now_playing)
+    # Screens follow the same volume setting as this machine's own speaker (0-100).
+    with config_lock:
+        try:
+            status["volume"] = max(0, min(100, int(load_config().get("volume", 70))))
+        except (TypeError, ValueError):
+            status["volume"] = 70
     test = tv_setup.pending_test(ip, client_id)
     if test and not status.get("filename"):  # a test never interrupts a real azan
         status.update(filename=tv_setup.TEST_FILENAME,
