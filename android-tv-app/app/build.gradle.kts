@@ -17,6 +17,22 @@ android {
         versionName = "1.0"
     }
 
+    // Sign every build with the same key, so an installed app can always be
+    // updated in place. CI decodes the ANDROID_DEBUG_KEYSTORE_B64 repo secret to
+    // the path in SMART_AZAN_KEYSTORE; without it (a local build) the normal
+    // per-machine debug key is used. Relying on ~/.android/debug.keystore alone
+    // didn't work on CI: every build came out with a different signature.
+    signingConfigs {
+        getByName("debug") {
+            System.getenv("SMART_AZAN_KEYSTORE")?.let { path ->
+                storeFile = file(path)
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
