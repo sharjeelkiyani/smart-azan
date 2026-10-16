@@ -39,6 +39,12 @@ _KEYCODE_SLEEP = "223"
 # give it this much extra time awake first.
 _POST_AZAN_BUFFER_S = 90
 
+# Longest a TV is kept awake waiting for "playback finished" before it's put back to
+# sleep anyway. This was 30 minutes, which switched the TVs off part-way through any
+# recitation longer than that (Surah Al-Kahf is ~47 min) - 3 hours covers the longest
+# surahs while still never leaving a TV on forever if the finished signal is lost.
+_MAX_PLAYBACK_S = 3 * 60 * 60
+
 
 def _lan_ip():
     """Best-effort LAN IP for this machine, so the Fire TV (a separate
@@ -156,7 +162,7 @@ def _tv_cycle_one(ip, finished_event):
     was_awake = _adb_is_awake(ip)
     if was_awake:
         print(f"[FireTV] {ip} already awake, leaving it alone", flush=True)
-        finished_event.wait(timeout=1800)
+        finished_event.wait(timeout=_MAX_PLAYBACK_S)
         return
 
     print(f"[FireTV] {ip} asleep, sending wake for azan", flush=True)
@@ -174,7 +180,7 @@ def _tv_cycle_one(ip, finished_event):
             print(f"[FireTV] {ip} still asleep after retry - adb connect may "
                   f"have failed or been too slow", flush=True)
 
-    finished_event.wait(timeout=1800)  # safety cap - never wait forever
+    finished_event.wait(timeout=_MAX_PLAYBACK_S)  # safety cap - never wait forever
     time.sleep(_POST_AZAN_BUFFER_S)
     print(f"[FireTV] {ip} putting back to sleep", flush=True)
     _adb(ip, "shell", "input", "keyevent", _KEYCODE_SLEEP)
@@ -202,4 +208,4 @@ def run_adb_tv_cycle(cfg, finished_event):
     for t in threads:
         t.start()
     for t in threads:
-        t.join(timeout=1800 + _POST_AZAN_BUFFER_S + 30)
+        t.join(timeout=_MAX_PLAYBACK_S + _POST_AZAN_BUFFER_S + 30)
