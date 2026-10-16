@@ -229,7 +229,7 @@
   </div>
 
   {% if play_file %}
-    <audio autoplay src="{{ url_for('serve_audio_file', filename=play_file) }}"></audio>
+    <audio autoplay id="play-audio" src="{{ url_for('serve_audio_file', filename=play_file) }}"></audio>
   {% endif %}
 
   <script>
@@ -288,24 +288,55 @@
         if (j.filename && j.play_id !== lastPlayId) {
           lastPlayId = j.play_id;
           const audio = new Audio('/audio_file/' + encodeURIComponent(j.filename));
+          trackPlayback(audio);
           audio.play().catch(() => {});
         }
       } catch (e) {}
     }
     setInterval(pollNowPlaying, 5000);
 
-    // Reload periodically so the displayed date/next-prayer/countdown
-    // baseline stays correct even across a long idle stretch (e.g. day
-    // rollover) - the polling above is only for reacting quickly to a new
-    // azan, not for the slower-changing display.
-    //
-    // Navigates to the bare path rather than location.reload(), which would
-    // preserve the current URL including a ?play=<file> query string (set
-    // when this page was opened specifically to autoplay one azan) - a
-    // plain reload would revisit that same URL and its <audio autoplay>
-    // tag would fire all over again, replaying an azan that had already
-    // finished if this page happened to still be on screen 5 minutes later.
-    setTimeout(() => { location.href = '/tv-display'; }, 5 * 60 * 1000);
+    // ---------- Keep long recitations playing to the end ----------
+    // Anything playing on this page (the ?play= autoplay, or one started by
+    // the polling above) is tracked here. The page used to reload itself on a
+    // fixed 5-minute timer, which cut off every surah longer than that - now it
+    // only refreshes when nothing is playing. window.__smartAzanPlaying is also
+    // read by the Fire TV app's overlay, so it stays up until the audio ends.
+    const playing = new Set();
+    let playingSince = 0;
+    const MAX_PLAY_MS = 3 * 60 * 60 * 1000;  // longer than any surah - a stalled stream can't block refreshes forever
+    window.__smartAzanPlaying = false;
+    function updatePlaying() {
+      window.__smartAzanPlaying = playing.size > 0;
+      if (!window.__smartAzanPlaying && window.SmartAzanTV && SmartAzanTV.onPlaybackEnded) {
+        try { SmartAzanTV.onPlaybackEnded(); } catch (e) {}
+      }
+    }
+    function trackPlayback(audio) {
+      audio.addEventListener('playing', () => {
+        if (!playing.size) playingSince = Date.now();
+        playing.add(audio); window.__smartAzanPlaying = true;
+      });
+      ['ended', 'error'].forEach(ev => audio.addEventListener(ev, () => { playing.delete(audio); updatePlaying(); }));
+    }
+    const pageAudio = document.getElementById('play-audio');
+    if (pageAudio) trackPlayback(pageAudio);
+
+    // The ?play=<file> part of the address only exists to start that one
+    // azan. Drop it straight away, so any later refresh (below, or by the TV)
+    // can never replay an azan that has already finished.
+    if (location.search.includes('play=')) history.replaceState(null, '', '/tv-display');
+
+    // Refresh every 5 minutes so the date / next prayer / countdown stay
+    // correct across a long idle stretch (e.g. day rollover) - but never while
+    // something is playing; try again a minute later instead.
+    function refreshWhenIdle() {
+      if (window.__smartAzanPlaying && Date.now() - playingSince < MAX_PLAY_MS) {
+        setTimeout(refreshWhenIdle, 60 * 1000);
+        return;
+      }
+      location.href = '/tv-display';
+    }
+    setTimeout(refreshWhenIdle, 5 * 60 * 1000);
   </script>
 </body>
 </html>

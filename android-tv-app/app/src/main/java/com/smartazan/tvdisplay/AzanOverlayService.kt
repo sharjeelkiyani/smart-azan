@@ -15,10 +15,12 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
+import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
 import android.view.WindowManager
+import android.webkit.JavascriptInterface
 import android.webkit.SslErrorHandler
 import android.webkit.WebChromeClient
 import android.webkit.WebView
@@ -46,7 +48,13 @@ class AzanOverlayService : Service() {
         const val CHANNEL_ID = "azan_watcher"
         const val NOTIFICATION_ID = 1
         const val POLL_INTERVAL_MS = 5000L
-        const val OVERLAY_AUTO_DISMISS_MS = 6 * 60 * 1000L
+        // The overlay stays up at least this long (so an azan is properly seen),
+        // then for as long as the page reports audio still playing - a long surah
+        // used to be cut off here at a fixed 6 minutes - and closes shortly after
+        // it ends. OVERLAY_MAX_MS is only a safety net for a stalled stream.
+        const val OVERLAY_MIN_MS = 6 * 60 * 1000L
+        const val OVERLAY_MAX_MS = 3 * 60 * 60 * 1000L
+        const val OVERLAY_CHECK_MS = 30 * 1000L
     }
 
     private lateinit var prefs: SharedPreferences
@@ -56,6 +64,39 @@ class AzanOverlayService : Service() {
     private var overlayView: WebView? = null
     private var windowManager: WindowManager? = null
     private var running = false
+    private var overlayShownAt = 0L
+
+    private val overlayCheck = object : Runnable {
+        override fun run() {
+            val view = overlayView ?: return
+            val elapsed = SystemClock.elapsedRealtime() - overlayShownAt
+            if (elapsed >= OVERLAY_MAX_MS) {
+                Log.d("SmartAzanTV", "overlay: safety limit reached, closing")
+                removeOverlay()
+                return
+            }
+            view.evaluateJavascript("window.__smartAzanPlaying === true") { result ->
+                if (result != "true" && elapsed >= OVERLAY_MIN_MS) {
+                    Log.d("SmartAzanTV", "overlay: nothing playing after ${elapsed / 1000}s, closing")
+                    removeOverlay()
+                } else {
+                    mainHandler.postDelayed(this, OVERLAY_CHECK_MS)
+                }
+            }
+        }
+    }
+
+    /** Called by tv_display.html when its audio finishes - checks straight away
+     *  instead of waiting for the next 30s check. */
+    inner class PlaybackBridge {
+        @JavascriptInterface
+        fun onPlaybackEnded() {
+            mainHandler.post {
+                mainHandler.removeCallbacks(overlayCheck)
+                mainHandler.post(overlayCheck)
+            }
+        }
+    }
 
     private val pollRunnable = object : Runnable {
         override fun run() {
@@ -140,6 +181,7 @@ class AzanOverlayService : Service() {
         webView.settings.domStorageEnabled = true
         webView.settings.mediaPlaybackRequiresUserGesture = false
         webView.webChromeClient = WebChromeClient()
+        webView.addJavascriptInterface(PlaybackBridge(), "SmartAzanTV")
         webView.webViewClient = object : WebViewClient() {
             override fun onReceivedSslError(view: WebView?, handler: SslErrorHandler?, error: SslError?) {
                 handler?.proceed()
@@ -181,7 +223,9 @@ class AzanOverlayService : Service() {
             webView.requestFocus()
             overlayView = webView
             Log.d("SmartAzanTV", "showOverlay: addView succeeded")
-            mainHandler.postDelayed({ removeOverlay() }, OVERLAY_AUTO_DISMISS_MS)
+            overlayShownAt = SystemClock.elapsedRealtime()
+            mainHandler.removeCallbacks(overlayCheck)
+            mainHandler.postDelayed(overlayCheck, OVERLAY_CHECK_MS)
         } catch (e: Exception) {
             Log.d("SmartAzanTV", "showOverlay: addView failed: $e")
             overlayView = null
@@ -203,6 +247,7 @@ class AzanOverlayService : Service() {
     }
 
     private fun removeOverlay() {
+        mainHandler.removeCallbacks(overlayCheck)
         overlayView?.let {
             try { windowManager?.removeView(it) } catch (e: Exception) {}
         }
