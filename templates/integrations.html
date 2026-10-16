@@ -114,6 +114,14 @@
         <input class="input" type="password" name="fully_kiosk_password"
                placeholder="Leave blank to keep current password">
       </div>
+      <div class="row" style="margin-top:10px;gap:8px;flex-wrap:wrap">
+        <button class="btn" type="button" data-fully="wake">Test wake (screen on)</button>
+        <button class="btn" type="button" data-fully="sleep">Screen off</button>
+        <span class="muted" id="fully-msg"></span>
+      </div>
+      <p class="muted" style="margin-top:4px">Uses the saved address and password - press Save first if you changed them.
+        {% if cfg.get('fully_kiosk_url') and not cfg.get('fully_kiosk_password') %}<strong style="color:#b45309">No password is saved yet.</strong>{% endif %}
+        {% if cfg.get('fully_kiosk_url') and not cfg.get('tv_display_enabled') %}<strong style="color:#b45309">Auto-wake is not ticked yet.</strong>{% endif %}</p>
 
       <h3 style="margin-top:18px">Using the Smart Azan TV app instead</h3>
       <p class="muted">
@@ -212,6 +220,13 @@
     catch (e) { msg.textContent = '✗ ' + e; }
     b.disabled = false;
   });
+
+  // ---- Fully Kiosk test ----
+  document.querySelectorAll('button[data-fully]').forEach(b => b.addEventListener('click', async () => {
+    const msg = document.getElementById('fully-msg'); msg.textContent = 'Asking the tablet…';
+    try { const r = await post('{{ url_for("dashboard.tv_test_fully") }}', {action: b.dataset.fully}); msg.textContent = (r.ok ? '✓ ' : '✗ ') + r.message; }
+    catch (e) { msg.textContent = '✗ ' + e; }
+  }));
 
   // ---- Connected screens ----
   const list = document.getElementById('screen-list'), sStatus = document.getElementById('screens-status');

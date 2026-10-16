@@ -283,6 +283,15 @@ def tv_test():
     return jsonify(tv_setup.test_tv(ip, action))
 
 
+@bp.route("/integrations/tv/test-fully", methods=["POST"])
+def tv_test_fully():
+    action = (request.get_json(silent=True) or {}).get("action")
+    if action not in ("wake", "sleep"):
+        return jsonify({"ok": False, "message": "Unknown test."}), 400
+    cfg = _cfg()
+    return jsonify(tv_setup.test_fully(cfg.get("fully_kiosk_url"), cfg.get("fully_kiosk_password"), action))
+
+
 @bp.route("/integrations/tv/screens")
 def tv_screens():
     return jsonify({"screens": tv_setup.clients()})

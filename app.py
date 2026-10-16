@@ -209,6 +209,7 @@ def load_config():
         return _fresh_default_config()
 
     # backfill
+    original = json.dumps(cfg, sort_keys=True)
     cfg.setdefault("azan_audio", "default_azan.mp3")
     cfg.setdefault("azan_audio_per_prayer", {})
     cfg.setdefault("duas", [])
@@ -237,7 +238,11 @@ def load_config():
     cfg.setdefault("fully_kiosk_password", "")
     cfg.setdefault("tv_http_port", 5051)
 
-    save_config(cfg)
+    # Only write when the backfill above actually added something. It used to save on
+    # every load - and every screen's /tv_status poll loads the config, so the file was
+    # rewritten every few seconds (needless SD-card wear on a Pi).
+    if json.dumps(cfg, sort_keys=True) != original:
+        save_config(cfg)
     return cfg
 
 

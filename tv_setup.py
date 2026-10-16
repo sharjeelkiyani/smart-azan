@@ -180,3 +180,32 @@ def test_tv(ip, action):
     start_test(ip)
     return {"ok": True, "message": "Opened the Smart Azan TV app - you should hear the test chime within 10 seconds. "
                                    "Press Home on the remote to leave it."}
+
+
+# ----------------- testing a Fully Kiosk tablet -----------------
+
+def test_fully(base_url, password, action):
+    """Ask a Fully Kiosk Browser tablet (Remote Administration on) to switch its screen on
+    or off, and say in plain words what happened."""
+    import json
+    import urllib.parse
+    import urllib.request
+    base_url = (base_url or "").rstrip("/")
+    if not base_url:
+        return {"ok": False, "message": "Enter the tablet's Fully Kiosk address and press Save first."}
+    if not password:
+        return {"ok": False, "message": "No Remote Admin password is saved - enter it and press Save first."}
+    cmd = {"wake": "screenOn", "sleep": "screenOff"}[action]
+    query = urllib.parse.urlencode({"cmd": cmd, "password": password, "type": "json"})
+    try:
+        with urllib.request.urlopen(f"{base_url}/?{query}", timeout=6) as r:
+            reply = json.loads(r.read().decode() or "{}")
+    except Exception as e:
+        return {"ok": False, "message": f"Couldn't reach the tablet at {base_url} ({e}). Is Fully Kiosk open, "
+                                        "Remote Administration on, and the address right?"}
+    status, text = reply.get("status", ""), reply.get("statustext", "")
+    if status.lower() == "ok" or "screen" in text.lower() and "error" not in status.lower():
+        return {"ok": True, "message": "The tablet's screen should now be " + ("on." if action == "wake" else "off.")}
+    if "login" in text.lower():
+        return {"ok": False, "message": "Wrong password - it must match Fully Kiosk's Remote Administration password."}
+    return {"ok": False, "message": f"The tablet answered: {text or status or reply}"}
